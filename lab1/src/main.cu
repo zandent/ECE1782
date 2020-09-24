@@ -1,5 +1,8 @@
 #include <sys/time.h>
 #include <stdio.h>
+
+//TODO for writing to file, will be deleted
+#include <stdlib.h>
 //TODO: could include later
 //#include <device_launch_parameters.h>
 //#include <cuda_runtime.h>
@@ -111,6 +114,10 @@ int main( int argc, char *argv[] ) {
  if(!memcmp(h_hC,h_dC,nx*ny)){
   //debugPrint(h_hC, nx, ny);
   //debugPrint(h_dC, nx, ny);
+  FILE* fptr;
+  fptr = fopen("time.log","a");
+  fprintf(fptr,"%.6f %.6f %.6f %.6f\n", timeStampD-timeStampA, timeStampB-timeStampA, timeStampC-timeStampB, timeStampD-timeStampC);
+  fclose(fptr);
   printf("%.6f %.6f %.6f %.6f\n", timeStampD-timeStampA, timeStampB-timeStampA, timeStampC-timeStampB, timeStampD-timeStampC);
  }else{
   printf("Error: function failed.\n");
