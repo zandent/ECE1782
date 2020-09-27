@@ -5,7 +5,8 @@
 #include <stdlib.h>
 //TODO: could include later
 //#include <device_launch_parameters.h>
-//#include <cuda_runtime.h>
+#include <cuda_runtime.h>
+#include "inc/helper_cuda.h"
 
 // time stamp function in seconds
 double getTimeStamp() {
@@ -52,7 +53,7 @@ __global__ void f_addmat( float *A, float *B, float *C, int nx, int ny ){
  // but you may want to pad the matrices and index into them accordingly
  int ix = threadIdx.x + blockIdx.x*blockDim.x ;
  int iy = threadIdx.y + blockIdx.y*blockDim.y ;
- int idx = iy*ny + ix ;
+ int idx = iy*nx + ix ;
  if( (ix<nx) && (iy<ny) )
  C[idx] = A[idx] + B[idx] ;
 }
@@ -111,6 +112,7 @@ int main( int argc, char *argv[] ) {
  // check result
  h_addmat( h_A, h_B, h_hC, nx, ny ) ;
  
+ // print out results
  if(!memcmp(h_hC,h_dC,nx*ny)){
   //debugPrint(h_hC, nx, ny);
   //debugPrint(h_dC, nx, ny);
@@ -122,5 +124,4 @@ int main( int argc, char *argv[] ) {
  }else{
   printf("Error: function failed.\n");
  }
- // print out results
 }
