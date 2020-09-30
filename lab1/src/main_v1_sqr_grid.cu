@@ -1,6 +1,6 @@
 #include <sys/time.h>
 #include <stdio.h>
-
+#include <math.h>
 //TODO for writing to file, will be deleted
 #include <stdlib.h>
 //TODO: could include later
@@ -8,6 +8,7 @@
 #include <cuda_runtime.h>
 //#include "../inc/helper_cuda.h"
 
+#define GRID_YDIM 65535
 // time stamp function in seconds
 double getTimeStamp() {
  struct timeval tv ;
@@ -60,15 +61,11 @@ void h_addmat(float *A, float *B, float *C, int nx, int ny){
 __global__ void f_addmat( float *A, float *B, float *C, int nx, int ny ){
  // kernel code might look something like this
  // but you may want to pad the matrices and index into them accordingly
- int ix = threadIdx.x;
- int iy = threadIdx.y*blockDim.x+blockIdx.x*blockDim.x*blockDim.y;
- int idx = iy + ix ;
- if(idx<nx*ny){
-  int x = idx/ny;
-  int y = idx%ny;
-  idx = y*nx+x;
-  C[idx] = A[idx] + B[idx] ;
- }
+ int ix = threadIdx.x + blockIdx.x*blockDim.x ;
+ int iy = threadIdx.y + blockIdx.y*blockDim.y ;
+ int idx = iy*blockDim.x*gridDim.x + ix ;
+ if(idx<nx*ny)
+ C[idx] = A[idx] + B[idx] ;
 }
 int main( int argc, char *argv[] ) {
  // get program arguments
@@ -97,6 +94,28 @@ int main( int argc, char *argv[] ) {
  cudaMalloc( (void **) &d_A, bytes ) ;
  cudaMalloc( (void **) &d_B, bytes ) ;
  cudaMalloc( (void **) &d_C, bytes ) ;
+ 
+ // invoke Kernel
+ dim3 block( 32, 32 ) ; // you will want to configure this
+ //int block = 64;
+ //int grid = (noElems + block-1)/block;
+ int gy = (int)sqrt(noElems);
+ int gx = (noElems+gy-1)/gy;
+ //printf("prev gx %d and gy %d\n",gx,gy);
+ if(gy > GRID_YDIM){
+  gx = (gx*gy+GRID_YDIM-1)/GRID_YDIM;
+  gy = GRID_YDIM;
+ }
+ //printf("gx %d and gy %d\n",gx,gy);
+ gx = (gx+block.x-1)/block.x;
+ gy = (gy+block.y-1)/block.y;
+ dim3 grid( gx, gy ) ;
+ //cudaDeviceProp GPUprop;
+ //cudaGetDeviceProperties(&GPUprop,0);
+ //printf("maxgridsize x is %d\n",GPUprop.maxGridSize[0]);
+ printf("noelems is %d\n",noElems);
+ //printf("gridx is %d\n",grid);
+ //printf("gridx is %d and grid y is %d\n",grid.x,grid.y);
 
  double timeStampA = getTimeStamp() ;
  //transfer data to dev
@@ -105,19 +124,6 @@ int main( int argc, char *argv[] ) {
  // note that the transfers would be twice as fast if h_A and h_B
  // matrices are pinned
  double timeStampB = getTimeStamp() ;
-
- // invoke Kernel
- dim3 block( 32, 32 ) ; // you will want to configure this
- //int block = 64;
- //int grid = (noElems + block-1)/block;
- int grid = (noElems + block.x*block.y-1)/(block.x*block.y);
- //dim3 grid( (nx + block.x-1)/block.x, (ny + block.y-1)/block.y ) ;
- //cudaDeviceProp GPUprop;
- //cudaGetDeviceProperties(&GPUprop,0);
- //printf("maxgridsize x is %d\n",GPUprop.maxGridSize[0]);
- //printf("noelems is %d\n",noElems);
- //printf("gridx is %d\n",grid);
- //printf("gridx is %d and grid y is %d\n",grid.x,grid.y);
 
  f_addmat<<<grid, block>>>( d_A, d_B, d_C, nx, ny ) ;
  cudaDeviceSynchronize() ;
@@ -140,7 +146,7 @@ int main( int argc, char *argv[] ) {
   //debugPrint(h_dC, nx, ny);
   FILE* fptr;
   fptr = fopen("time.log","a");
-  fprintf(fptr,"%dX%d %.6f %.6f %.6f %.6f\n",nx, ny, timeStampD-timeStampA, timeStampB-timeStampA, timeStampC-timeStampB, timeStampD-timeStampC);
+  fprintf(fptr,"%dX%d %.6f %.6f %.6f %.6f\n", nx, ny, timeStampD-timeStampA, timeStampB-timeStampA, timeStampC-timeStampB, timeStampD-timeStampC);
   fclose(fptr);
   printf("%.6f %.6f %.6f %.6f\n", timeStampD-timeStampA, timeStampB-timeStampA, timeStampC-timeStampB, timeStampD-timeStampC);
  }else{

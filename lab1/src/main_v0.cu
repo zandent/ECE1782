@@ -84,15 +84,7 @@ int main( int argc, char *argv[] ) {
  cudaMalloc( (void **) &d_A, bytes ) ;
  cudaMalloc( (void **) &d_B, bytes ) ;
  cudaMalloc( (void **) &d_C, bytes ) ;
-
- double timeStampA = getTimeStamp() ;
- //transfer data to dev
- cudaMemcpy( d_A, h_A, bytes, cudaMemcpyHostToDevice ) ;
- cudaMemcpy( d_B, h_B, bytes, cudaMemcpyHostToDevice ) ;
- // note that the transfers would be twice as fast if h_A and h_B
- // matrices are pinned
- double timeStampB = getTimeStamp() ;
-
+ 
  // invoke Kernel
  dim3 block( 32, 32 ) ; // you will want to configure this
  int gx = (nx + block.x-1)/block.x;
@@ -105,6 +97,15 @@ int main( int argc, char *argv[] ) {
  //printf("gx %d and gy %d\n",gx,gy);
  dim3 grid(gx,gy);
  //dim3 grid( (nx + block.x-1)/block.x, (ny + block.y-1)/block.y ) ;
+
+ double timeStampA = getTimeStamp() ;
+ //transfer data to dev
+ cudaMemcpy( d_A, h_A, bytes, cudaMemcpyHostToDevice ) ;
+ cudaMemcpy( d_B, h_B, bytes, cudaMemcpyHostToDevice ) ;
+ // note that the transfers would be twice as fast if h_A and h_B
+ // matrices are pinned
+ double timeStampB = getTimeStamp() ;
+
 
  f_addmat<<<grid, block>>>( d_A, d_B, d_C, nx, ny ) ;
  cudaDeviceSynchronize() ;
