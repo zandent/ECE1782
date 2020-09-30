@@ -48,13 +48,22 @@ void h_addmat(float *A, float *B, float *C, int nx, int ny){
  }
 }
 // device-side matrix addition
+//__global__ void f_addmat( float *A, float *B, float *C, int nx, int ny ){
+// // kernel code might look something like this
+// // but you may want to pad the matrices and index into them accordingly
+// int ix = threadIdx.x + blockIdx.x*blockDim.x ;
+// int iy = threadIdx.y + blockIdx.y*blockDim.y ;
+// int idx = iy*nx + ix ;
+// if( (ix<nx) && (iy<ny) )
+// C[idx] = A[idx] + B[idx] ;
+//}
 __global__ void f_addmat( float *A, float *B, float *C, int nx, int ny ){
  // kernel code might look something like this
  // but you may want to pad the matrices and index into them accordingly
- int ix = threadIdx.x + blockIdx.x*blockDim.x ;
- int iy = threadIdx.y + blockIdx.y*blockDim.y ;
- int idx = iy*nx + ix ;
- if( (ix<nx) && (iy<ny) )
+ int ix = threadIdx.x;
+ int iy = threadIdx.y*blockDim.x + blockIdx.x*blockDim.x*blockDim.x ;
+ int idx = iy + ix ;
+ if(idx<nx*ny)
  C[idx] = A[idx] + B[idx] ;
 }
 int main( int argc, char *argv[] ) {
@@ -94,8 +103,17 @@ int main( int argc, char *argv[] ) {
  double timeStampB = getTimeStamp() ;
 
  // invoke Kernel
- dim3 block( 32, 32 ) ; // you will want to configure this
- dim3 grid( (nx + block.x-1)/block.x, (ny + block.y-1)/block.y ) ;
+ dim3 block( 8, 8 ) ; // you will want to configure this
+ //int block = 64;
+ //int grid = (noElems + block-1)/block;
+ int grid = (noElems + block.x*block.y-1)/(block.x*block.y);
+ //dim3 grid( (nx + block.x-1)/block.x, (ny + block.y-1)/block.y ) ;
+ cudaDeviceProp GPUprop;
+ cudaGetDeviceProperties(&GPUprop,0);
+ printf("maxgridsize x is %d",GPUprop.maxGridSize[0]);
+ printf("noelems is %d\n",noElems);
+ printf("gridx is %d\n",grid);
+ //printf("gridx is %d and grid y is %d\n",grid.x,grid.y);
 
  f_addmat<<<grid, block>>>( d_A, d_B, d_C, nx, ny ) ;
  cudaDeviceSynchronize() ;
