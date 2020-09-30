@@ -60,8 +60,8 @@ void h_addmat(float *A, float *B, float *C, int nx, int ny){
 __global__ void f_addmat( float *A, float *B, float *C, int nx, int ny ){
  // kernel code might look something like this
  // but you may want to pad the matrices and index into them accordingly
- int ix = threadIdx.x;
- int iy = threadIdx.y*blockDim.x + blockIdx.x*blockDim.x*blockDim.y;
+ int ix = threadIdx.x*blockDim.y+blockIdx.x*blockDim.x*blockDim.y;
+ int iy = threadIdx.y;
  int idx = iy + ix ;
  if(idx<nx*ny)
  C[idx] = A[idx] + B[idx] ;
