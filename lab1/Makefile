@@ -10,7 +10,7 @@ LDLIBS :=
 # sources
 SRC := src
 OUT := out
-src0 := main.cu
+src0 := main_v0.cu
 src1 := main_v1.cu
 src2 := main_v2.cu
 src3 := main_v3.cu

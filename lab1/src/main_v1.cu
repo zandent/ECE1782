@@ -103,16 +103,16 @@ int main( int argc, char *argv[] ) {
  double timeStampB = getTimeStamp() ;
 
  // invoke Kernel
- dim3 block( 8, 8 ) ; // you will want to configure this
+ dim3 block( 32, 32 ) ; // you will want to configure this
  //int block = 64;
  //int grid = (noElems + block-1)/block;
  int grid = (noElems + block.x*block.y-1)/(block.x*block.y);
  //dim3 grid( (nx + block.x-1)/block.x, (ny + block.y-1)/block.y ) ;
- cudaDeviceProp GPUprop;
- cudaGetDeviceProperties(&GPUprop,0);
- printf("maxgridsize x is %d\n",GPUprop.maxGridSize[0]);
- printf("noelems is %d\n",noElems);
- printf("gridx is %d\n",grid);
+ //cudaDeviceProp GPUprop;
+ //cudaGetDeviceProperties(&GPUprop,0);
+ //printf("maxgridsize x is %d\n",GPUprop.maxGridSize[0]);
+ //printf("noelems is %d\n",noElems);
+ //printf("gridx is %d\n",grid);
  //printf("gridx is %d and grid y is %d\n",grid.x,grid.y);
 
  f_addmat<<<grid, block>>>( d_A, d_B, d_C, nx, ny ) ;
@@ -136,7 +136,7 @@ int main( int argc, char *argv[] ) {
   //debugPrint(h_dC, nx, ny);
   FILE* fptr;
   fptr = fopen("time.log","a");
-  fprintf(fptr,"%.6f %.6f %.6f %.6f\n", timeStampD-timeStampA, timeStampB-timeStampA, timeStampC-timeStampB, timeStampD-timeStampC);
+  fprintf(fptr,"%dX%d %.6f %.6f %.6f %.6f\n", nx, ny, timeStampD-timeStampA, timeStampB-timeStampA, timeStampC-timeStampB, timeStampD-timeStampC);
   fclose(fptr);
   printf("%.6f %.6f %.6f %.6f\n", timeStampD-timeStampA, timeStampB-timeStampA, timeStampC-timeStampB, timeStampD-timeStampC);
  }else{
