@@ -7,7 +7,7 @@
 //#include <device_launch_parameters.h>
 #include <cuda_runtime.h>
 //#include "../inc/helper_cuda.h"
-
+#define GRID_YDIM 65535
 // time stamp function in seconds
 double getTimeStamp() {
  struct timeval tv ;
@@ -16,25 +16,25 @@ double getTimeStamp() {
 }
 void initDataA(float* data, int nx, int ny){ 
  int i,j;
- for(i = 0; i < nx; i++){
-  for(j = 0; j < ny; j++){
-   data[i*ny + j] = (float) (i+j)/3.0;
+ for(i = 0; i < ny; i++){
+  for(j = 0; j < nx; j++){
+   data[i*nx + j] = (float) (i+j)/3.0;
   }
  }
 }
 void initDataB(float* data, int nx, int ny){ 
  int i,j;
- for(i = 0; i < nx; i++){
-  for(j = 0; j < ny; j++){
-   data[i*ny + j] = (float)3.14*(i+j);
+ for(i = 0; i < ny; i++){
+  for(j = 0; j < nx; j++){
+   data[i*nx + j] = (float)3.14*(i+j);
   }
  }
 }
 void debugPrint(float* data, int nx, int ny){
  int i,j;
- for(i = 0; i < nx; i++){
-  for(j = 0; j < ny; j++){
-   printf("%f ",data[i*ny + j]);
+ for(i = 0; i < ny; i++){
+  for(j = 0; j < nx; j++){
+   printf("%f ",data[i*nx + j]);
   }
   printf("\n");
  }
@@ -53,8 +53,8 @@ __global__ void f_addmat( float *A, float *B, float *C, int nx, int ny ){
  // but you may want to pad the matrices and index into them accordingly
  int ix = threadIdx.x + blockIdx.x*blockDim.x ;
  int iy = threadIdx.y + blockIdx.y*blockDim.y ;
- int idx = iy*nx + ix ;
- if( (ix<nx) && (iy<ny) )
+ int idx = iy*blockDim.x*gridDim.x + ix ;
+ if(idx<nx*ny)
  C[idx] = A[idx] + B[idx] ;
 }
 int main( int argc, char *argv[] ) {
@@ -95,7 +95,16 @@ int main( int argc, char *argv[] ) {
 
  // invoke Kernel
  dim3 block( 32, 32 ) ; // you will want to configure this
- dim3 grid( (nx + block.x-1)/block.x, (ny + block.y-1)/block.y ) ;
+ int gx = (nx + block.x-1)/block.x;
+ int gy = (ny + block.y-1)/block.y;
+ //printf("prev gx %d and gy %d\n",gx,gy);
+ if(gy > GRID_YDIM){
+  gx = (gx*gy+GRID_YDIM-1)/GRID_YDIM;
+  gy = GRID_YDIM;
+ }
+ //printf("gx %d and gy %d\n",gx,gy);
+ dim3 grid(gx,gy);
+ //dim3 grid( (nx + block.x-1)/block.x, (ny + block.y-1)/block.y ) ;
 
  f_addmat<<<grid, block>>>( d_A, d_B, d_C, nx, ny ) ;
  cudaDeviceSynchronize() ;
