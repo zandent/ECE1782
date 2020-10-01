@@ -31,6 +31,7 @@ all:
 	$(CC) -o $(OUT)/$(tgt1) $(SRC)/$(src1)
 	$(CC) -o $(OUT)/$(tgt2) $(SRC)/$(src2)
 	$(CC) -o $(OUT)/$(tgt3) $(SRC)/$(src3)
+	$(CC) -o $(OUT)/$(tgt4) $(SRC)/$(src4)
 
 clean:
 	$(RM) $(OUT)/*
