@@ -131,7 +131,7 @@ int main( int argc, char *argv[] ) {
  h_addmat( h_A, h_B, h_hC, nx, ny ) ;
  
  // print out results
- if(!memcmp(h_hC,h_dC,nx*ny)){
+ if(!memcmp(h_hC,h_dC,nx*ny*sizeof(float))){
   //debugPrint(h_hC, nx, ny);
   //debugPrint(h_dC, nx, ny);
   FILE* fptr;

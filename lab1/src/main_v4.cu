@@ -51,28 +51,27 @@ void h_addmat(float *A, float *B, float *C, int nx, int ny){
 __global__ void f_addmat( float *A, float *B, float *C, int nx, int ny ){
  // kernel code might look something like this
  // but you may want to pad the matrices and index into them accordingly
- //extern __shared__ float sA[];
- //extern __shared__ float sB[];
+ //__shared__ float sA[32][32];
+ //__shared__ float sB[32][32];
+ //__shared__ float sC[32][32];
 
  int ix = threadIdx.x;
  int iy = threadIdx.y*blockDim.x + blockIdx.x*blockDim.x*blockDim.y;
- int idx = iy + ix ;
- //sA[idx] = A[idx];
- //sB[idx] = B[idx];
- if(idx<((nx*ny+3)/4)){
-  int newidx = idx*4;
-  if(newidx<nx*ny)
-  C[newidx] = A[newidx] + B[newidx] ;
-  if(newidx+1<nx*ny)
-  C[newidx+1] = A[newidx+1] + B[newidx+1] ;
-  if(newidx+2<nx*ny)
-  C[newidx+2] = A[newidx+2] + B[newidx+2] ;
-  if(newidx+3<nx*ny)
-  C[newidx+3] = A[newidx+3] + B[newidx+3] ;
-  //sA[idx] = sA[idx] + sB[idx] ;
- }//else if(idx<(nx*ny+3)/4){
-  
- //}
+ int idx = (iy + ix)*4 ;
+ if(idx<nx*ny){
+  //int sidx = threadIdx.y*blockDim.x + threadIdx.x;
+  int size = ((nx*ny-idx)<4) ? (nx*ny-idx) : 4;
+  //printf("sidx is %d, idx is %d, size is %d\n", sidx, idx, size);
+  for(int i = idx; i < idx + size; i++){
+   //sA[threadIdx.x][threadIdx.y] = A[i];
+   //sB[threadIdx.x][threadIdx.y] = B[i];
+   //__syncthreads();
+   //sC[threadIdx.x][threadIdx.y] = sA[threadIdx.x][threadIdx.y] + sB[threadIdx.x][threadIdx.y];
+   //__syncthreads();
+   //C[i] = sC[threadIdx.x][threadIdx.y];
+   C[i] = A[i] + B[i];
+  }
+ }
 }
 int main( int argc, char *argv[] ) {
  // get program arguments
@@ -119,6 +118,7 @@ int main( int argc, char *argv[] ) {
  //dim3 grid( (nx + block.x-1)/block.x, (ny + block.y-1)/block.y ) ;
  //cudaDeviceProp GPUprop;
  //cudaGetDeviceProperties(&GPUprop,0);
+ //printf("sharedmemperblk is %d\n",GPUprop.sharedMemPerBlock);
  //printf("maxgridsize x is %d\n",GPUprop.maxGridSize[0]);
  //printf("noelems is %d\n",noElems);
  //printf("gridx is %d\n",grid);
@@ -140,15 +140,17 @@ int main( int argc, char *argv[] ) {
  h_addmat( h_A, h_B, h_hC, nx, ny ) ;
  
  // print out results
- if(!memcmp(h_hC,h_dC,nx*ny)){
+ if(!memcmp(h_hC,h_dC,nx*ny*sizeof(float))){
+  //debugPrint(h_hC, nx, ny);
+  //debugPrint(h_dC, nx, ny);
   FILE* fptr;
   fptr = fopen("time.log","a");
   fprintf(fptr,"%dX%d %.6f %.6f %.6f %.6f\n", nx, ny, timeStampD-timeStampA, timeStampB-timeStampA, timeStampC-timeStampB, timeStampD-timeStampC);
   fclose(fptr);
   printf("%.6f %.6f %.6f %.6f\n", timeStampD-timeStampA, timeStampB-timeStampA, timeStampC-timeStampB, timeStampD-timeStampC);
  }else{
-  //debugPrint(h_hC, nx, ny);
-  //debugPrint(h_dC, nx, ny);
+  debugPrint(h_hC, nx, ny);
+  debugPrint(h_dC, nx, ny);
   printf("Error: function failed.\n");
  }
 }
