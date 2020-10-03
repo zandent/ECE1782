@@ -14,28 +14,6 @@ double getTimeStamp() {
  gettimeofday( &tv, NULL ) ;
  return (double) tv.tv_usec/1000000 + tv.tv_sec ;
 }
-void initData(float* data0, float* data1, int nx, int ny){ 
- int i,j;
- int idx;
- for(i = 0; i < nx; i++){
-  for(j = 0; j < ny; j++){
-   //printf("i is %d and j is %d\n",i,j);
-   idx = 2*(i*ny+j);
-   if(idx<nx*ny){
-    data0[idx] = (float)(i+j)/3.0;
-    data0[idx+1] = (float)3.14*(i+j);
-   }else{
-    if((nx*ny)%2){
-     data1[idx-1-nx*ny] = (float)(i+j)/3.0;
-     data1[idx-nx*ny] = (float)3.14*(i+j);
-    }else{
-     data1[idx-nx*ny] = (float)(i+j)/3.0;
-     data1[idx+1-nx*ny] = (float)3.14*(i+j);
-    }
-   } 
-  }
- }
-}
 void initDataA(float* data, int nx, int ny){ 
  int i,j;
  for(i = 0; i < nx; i++){
@@ -63,24 +41,14 @@ void debugPrint(float* data, int nx, int ny){
  printf("\n");
 }
 // host side matrix addition
-void h_addmat(float *A, float* B, float *C, int nx, int ny){
+void h_addmat(float *A, float *B, float *C, int nx, int ny){
  int i;
- for(i = 0; i < 2*nx*ny; i+=2){
-  if(i<nx*ny){
-   C[i/2] = A[i] + A[i+1];
-  //}else if(i==nx*ny-1){
-   //C[i/2] = A[i] + B[i+1-nx*ny];
-  }else{
-   if((nx*ny)%2){
-    C[i/2] = B[i-nx*ny] + B[i-1-nx*ny];
-   }else{
-    C[i/2] = B[i-nx*ny] + B[i+1-nx*ny];
-   }
-  }
+ for(i = 0; i < nx*ny; i++){
+  C[i] = A[i] + B[i];
  }
 }
 // device-side matrix addition
-__global__ void f_addmat( float *A, float* midA, float *C, int nx, int ny ){
+__global__ void f_addmat( float *A, float *B, float *C, int nx, int ny ){
  // kernel code might look something like this
  // but you may want to pad the matrices and index into them accordingly
  //__shared__ float sA[32][32];
@@ -90,33 +58,18 @@ __global__ void f_addmat( float *A, float* midA, float *C, int nx, int ny ){
  int ix = threadIdx.x;
  int iy = threadIdx.y*blockDim.x + blockIdx.x*blockDim.x*blockDim.y;
  int idx = (iy + ix)*4 ;
- float* tmp;
- int size;
- int i;
- if((2*idx)<(nx*ny)&&((nx*ny-2*idx)>=8)){
-  tmp=A;
-  if((nx*ny+((nx*ny)%2)-2*idx)<16){
-   size = (nx*ny+((nx*ny)%2)-2*idx)/2;
-  }else{
-   size = 4;
-  }
-  i = 2*idx;
- }else{
-  tmp=midA;
-  if( (2*idx) < (nx*ny+((nx*ny)%2)) ){
-   idx = (nx*ny+((nx*ny)%2))/2;
-  }
-  if((nx*ny*2-2*idx)<=2*((iy + ix)*4+4-idx)){
-   size = (nx*ny*2-2*idx)/2;
-  }else{
-   size = (iy + ix)*4+4-idx;
-  }
-  i = 2*idx-nx*ny-(nx*ny)%2;
- }
  if(idx<nx*ny){
-  int j;
-  for(j = 0; j < size; j++){
-   C[idx+j]   = tmp[i+2*j]   + tmp[i+2*j+1];
+  //int sidx = threadIdx.y*blockDim.x + threadIdx.x;
+  int size = ((nx*ny-idx)<4) ? (nx*ny-idx) : 4;
+  //printf("sidx is %d, idx is %d, size is %d\n", sidx, idx, size);
+  for(int i = idx; i < idx + size; i++){
+   //sA[threadIdx.x][threadIdx.y] = A[i];
+   //sB[threadIdx.x][threadIdx.y] = B[i];
+   //__syncthreads();
+   //sC[threadIdx.x][threadIdx.y] = sA[threadIdx.x][threadIdx.y] + sB[threadIdx.x][threadIdx.y];
+   //__syncthreads();
+   //C[i] = sC[threadIdx.x][threadIdx.y];
+   C[i] = A[i] + B[i];
   }
  }
 }
@@ -133,24 +86,25 @@ int main( int argc, char *argv[] ) {
  // but you may want to pad the matrices…
 
  // alloc memory host-side
- float *h_A = (float *) malloc( bytes + (noElems%2)*sizeof(float)) ;
- float *h_B = (float *) malloc( bytes - (noElems%2)*sizeof(float)) ;
+ float *h_A = (float *) malloc( bytes ) ;
+ float *h_B = (float *) malloc( bytes ) ;
  float *h_hC = (float *) malloc( bytes ) ; // host result
  float *h_dC = (float *) malloc( bytes ) ; // gpu result
 
  // init matrices with random data
- initData( h_A, h_B, nx, ny) ;
+ //initData( h_A, noElems ) ; initData( h_B, noElems ) ;
+ initDataA(h_A, nx, ny);
+ initDataB(h_B, nx, ny);
  // alloc memory dev-side
- float *d_A, *d_midA, *d_C ;
- cudaMalloc( (void **) &d_A, bytes + (noElems%2)*sizeof(float)) ;
- //printf("int is %d, size is %d\n",bytes + (noElems%2)*sizeof(float),sizeof(d_A));
- cudaMalloc( (void **) &d_midA, bytes - (noElems%2)*sizeof(float)) ;
+ float *d_A, *d_B, *d_C ;
+ cudaMalloc( (void **) &d_A, bytes ) ;
+ cudaMalloc( (void **) &d_B, bytes ) ;
  cudaMalloc( (void **) &d_C, bytes ) ;
 
  double timeStampA = getTimeStamp() ;
  //transfer data to dev
- cudaMemcpy( d_A, h_A, bytes+(noElems%2)*sizeof(float), cudaMemcpyHostToDevice ) ;
- cudaMemcpy( d_midA, h_B, bytes-(noElems%2)*sizeof(float), cudaMemcpyHostToDevice ) ;
+ cudaMemcpy( d_A, h_A, bytes, cudaMemcpyHostToDevice ) ;
+ cudaMemcpy( d_B, h_B, bytes, cudaMemcpyHostToDevice ) ;
  // note that the transfers would be twice as fast if h_A and h_B
  // matrices are pinned
  double timeStampB = getTimeStamp() ;
@@ -160,7 +114,7 @@ int main( int argc, char *argv[] ) {
  //int block = 64;
  //int grid = (noElems + block-1)/block;
  //int grid = (noElems + block.x*block.y-1)/(block.x*block.y);
- int grid = ((noElems+3)/4 + 1 + block.x*block.y-1)/(block.x*block.y);
+ int grid = ((noElems+3)/4 + block.x*block.y-1)/(block.x*block.y);
  //dim3 grid( (nx + block.x-1)/block.x, (ny + block.y-1)/block.y ) ;
  //cudaDeviceProp GPUprop;
  //cudaGetDeviceProperties(&GPUprop,0);
@@ -170,7 +124,7 @@ int main( int argc, char *argv[] ) {
  //printf("gridx is %d\n",grid);
  //printf("gridx is %d and grid y is %d\n",grid.x,grid.y);
 
- f_addmat<<<grid, block>>>( d_A, d_midA, d_C, nx, ny ) ;
+ f_addmat<<<grid, block>>>( d_A, d_B, d_C, nx, ny ) ;
  cudaDeviceSynchronize() ;
 
  double timeStampC = getTimeStamp() ;
@@ -179,7 +133,7 @@ int main( int argc, char *argv[] ) {
  double timeStampD = getTimeStamp() ;
 
  // free GPU resources
- cudaFree( d_A ) ; cudaFree( d_midA ) ; cudaFree( d_C ) ;
+ cudaFree( d_A ) ; cudaFree( d_B ) ; cudaFree( d_C ) ;
  cudaDeviceReset() ;
 
  // check result
