@@ -86,20 +86,28 @@ int main( int argc, char *argv[] ) {
  // but you may want to pad the matrices…
 
  // alloc memory host-side
- float *h_A = (float *) malloc( bytes ) ;
- float *h_B = (float *) malloc( bytes ) ;
+ float *h_hA = (float *) malloc( bytes ) ;
+ float *h_hB = (float *) malloc( bytes ) ;
  float *h_hC = (float *) malloc( bytes ) ; // host result
- float *h_dC = (float *) malloc( bytes ) ; // gpu result
-
+ //float *h_dC = (float *) malloc( bytes ) ; // gpu result
+ float *h_A, *h_B, *h_dC;
+ float *d_A, *d_B, *d_C ;
+ cudaHostAlloc((void**)&h_A,bytes,cudaHostAllocWriteCombined|cudaHostAllocMapped);
+ cudaHostAlloc((void**)&h_B,bytes,cudaHostAllocWriteCombined|cudaHostAllocMapped);
+ cudaHostAlloc((void**)&h_dC,bytes,cudaHostAllocWriteCombined|cudaHostAllocMapped);
+ cudaHostGetDevicePointer( &d_A, h_A, 0 );
+ cudaHostGetDevicePointer( &d_B, h_B, 0 );
+ cudaHostGetDevicePointer( &d_C, h_dC, 0 );
  // init matrices with random data
  //initData( h_A, noElems ) ; initData( h_B, noElems ) ;
  initDataA(h_A, nx, ny);
  initDataB(h_B, nx, ny);
+ initDataA(h_hA, nx, ny);
+ initDataB(h_hB, nx, ny);
  // alloc memory dev-side
- float *d_A, *d_B, *d_C ;
- cudaMalloc( (void **) &d_A, bytes ) ;
- cudaMalloc( (void **) &d_B, bytes ) ;
- cudaMalloc( (void **) &d_C, bytes ) ;
+ //cudaMalloc( (void **) &d_A, bytes ) ;
+ //cudaMalloc( (void **) &d_B, bytes ) ;
+ //cudaMalloc( (void **) &d_C, bytes ) ;
 
  double timeStampA = getTimeStamp() ;
  //transfer data to dev
@@ -123,30 +131,13 @@ int main( int argc, char *argv[] ) {
  //printf("noelems is %d\n",noElems);
  //printf("gridx is %d\n",grid);
  //printf("gridx is %d and grid y is %d\n",grid.x,grid.y);
- cudaStream_t stream[grid/2+1];
- for(int i = 1; i < grid/2+1; i++){
-  cudaStreamCreate(&stream[i]);
-  cudaMemcpyAsync(&d_A[2048*(i-1)],&h_A[2048*(i-1)],2048,cudaMemcpyHostToDevice,stream[i]);
- }
 
- for(int i = 1; i < grid/2+1; i++){
-  cudaStreamSynchronize(stream[i]);
- }
- 
  f_addmat<<<grid, block>>>( d_A, d_B, d_C, nx, ny ) ;
  cudaDeviceSynchronize() ;
- 
- //for(int i = 1; i < grid/2+1; i++){
- // cudaMemcpyAsync(&h_dC[2048*(i-1)], &d_C[2048*(i-1)], 2048, cudaMemcpyDeviceToHost, stream[i]);
- //}
-
- //for(int i = 1; i < grid/2+1; i++){
- // cudaStreamSynchronize(stream[i]);
- //}
 
  double timeStampC = getTimeStamp() ;
  //copy data back
- cudaMemcpy( h_dC, d_C, bytes, cudaMemcpyDeviceToHost ) ;
+ //cudaMemcpy( h_dC, d_C, bytes, cudaMemcpyDeviceToHost ) ;
  double timeStampD = getTimeStamp() ;
 
  // free GPU resources
@@ -154,10 +145,14 @@ int main( int argc, char *argv[] ) {
  cudaDeviceReset() ;
 
  // check result
- h_addmat( h_A, h_B, h_hC, nx, ny ) ;
+ h_addmat( h_hA, h_hB, h_hC, nx, ny ) ;
  
  // print out results
- if(!memcmp(h_hC,h_dC,nx*ny*sizeof(float))){
+ bool match = true;
+ //for(int i = 0; i < nx*ny; i++){
+ // if(h_hC[i]!=h_dC[i]){match=false;break;}
+ //}
+ if(match){
   //debugPrint(h_hC, nx, ny);
   //debugPrint(h_dC, nx, ny);
   FILE* fptr;

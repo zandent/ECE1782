@@ -4,7 +4,7 @@ RM := rm -f
 
 # flags
 CFLAGS := -ggdb
-LDFLAGS :=
+CUFLAGS := -lcublas_static -lcublasLt_static -lculibos
 LDLIBS :=
 
 # sources

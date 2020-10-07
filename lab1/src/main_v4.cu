@@ -1,6 +1,5 @@
 #include <sys/time.h>
 #include <stdio.h>
-
 //TODO for writing to file, will be deleted
 #include <stdlib.h>
 //TODO: could include later
@@ -48,7 +47,7 @@ void h_addmat(float *A, float *B, float *C, int nx, int ny){
  }
 }
 // device-side matrix addition
-__global__ void f_addmat( float *A, float *B, float *C, int nx, int ny ){
+__global__ void f_addmat( float *A, float *B, int nx, int ny/*, int padrow*/){
  // kernel code might look something like this
  // but you may want to pad the matrices and index into them accordingly
  //__shared__ float sA[32][32];
@@ -57,21 +56,41 @@ __global__ void f_addmat( float *A, float *B, float *C, int nx, int ny ){
 
  int ix = threadIdx.x;
  int iy = threadIdx.y*blockDim.x + blockIdx.x*blockDim.x*blockDim.y;
- int idx = (iy + ix)*4 ;
- if(idx<nx*ny){
+ int idx = iy + ix ;
+ //int col = idx-padrow*(int)(idx/padrow);
+ //if(idx<nx*padrow && col<ny){
+ //if(idx<gridDim.x/4*blockDim.x*blockDim.y){
   //int sidx = threadIdx.y*blockDim.x + threadIdx.x;
-  int size = ((nx*ny-idx)<4) ? (nx*ny-idx) : 4;
+  //int size = ((nx*ny-idx)<4) ? (nx*ny-idx) : 4;
+  //int size=4;
+  //if((ny-col)<4){
+  // size = ny-col;
+  //}
+  //if(col<4){
+  // size += col;
+  //}
+
+  //float tmpA[4];
+  //float tmpB[4];
+  //memcpy(tmpA,&A[idx],size);
+  //memcpy(tmpB,&B[idx],size);
+  //for(int j = 0; j < size; j++){
+  // tmpB[j] += tmpA[j];
+  //}
+  //memcpy(&B[idx],tmpB,size);
   //printf("sidx is %d, idx is %d, size is %d\n", sidx, idx, size);
-  for(int i = idx; i < idx + size; i++){
+  #pragma unroll
+  for(int i = idx; i < nx*ny; i+=gridDim.x*blockDim.x*blockDim.y){
    //sA[threadIdx.x][threadIdx.y] = A[i];
    //sB[threadIdx.x][threadIdx.y] = B[i];
    //__syncthreads();
    //sC[threadIdx.x][threadIdx.y] = sA[threadIdx.x][threadIdx.y] + sB[threadIdx.x][threadIdx.y];
    //__syncthreads();
    //C[i] = sC[threadIdx.x][threadIdx.y];
-   C[i] = A[i] + B[i];
+   //printf("index %d\n",i);
+   B[i] += A[i];
   }
- }
+ //}
 }
 int main( int argc, char *argv[] ) {
  // get program arguments
@@ -99,12 +118,20 @@ int main( int argc, char *argv[] ) {
  float *d_A, *d_B, *d_C ;
  cudaMalloc( (void **) &d_A, bytes ) ;
  cudaMalloc( (void **) &d_B, bytes ) ;
+ //size_t pitchA,pitchB, pitchC;
+ //cudaMallocPitch(&d_A,&pitchA,ny*sizeof(float),nx);
+ //cudaMallocPitch(&d_B,&pitchB,ny*sizeof(float),nx);
+ //cudaMallocPitch(&d_C,&pitchC,ny*sizeof(float),nx);
+ //float *h_ddC = (float *) malloc(nx*pitchC);
  cudaMalloc( (void **) &d_C, bytes ) ;
-
+ cudaDeviceSetCacheConfig(cudaFuncCachePreferL1);
  double timeStampA = getTimeStamp() ;
  //transfer data to dev
  cudaMemcpy( d_A, h_A, bytes, cudaMemcpyHostToDevice ) ;
  cudaMemcpy( d_B, h_B, bytes, cudaMemcpyHostToDevice ) ;
+ //printf("pA is %d and pB is %d\n",pitchA,pitchB);
+ //cudaMemcpy2D( d_A, pitchA, h_A,ny*sizeof(float),ny*sizeof(float),nx,cudaMemcpyHostToDevice ) ;
+ //cudaMemcpy2D( d_B, pitchB, h_B,ny*sizeof(float),ny*sizeof(float),nx,cudaMemcpyHostToDevice ) ;
  // note that the transfers would be twice as fast if h_A and h_B
  // matrices are pinned
  double timeStampB = getTimeStamp() ;
@@ -113,8 +140,8 @@ int main( int argc, char *argv[] ) {
  dim3 block( 32, 32 ) ; // you will want to configure this
  //int block = 64;
  //int grid = (noElems + block-1)/block;
- //int grid = (noElems + block.x*block.y-1)/(block.x*block.y);
  int grid = ((noElems+3)/4 + block.x*block.y-1)/(block.x*block.y);
+ //int grid = (((pitchA/4*nx*sizeof(float))+3)/4 + block.x*block.y-1)/(block.x*block.y);
  //dim3 grid( (nx + block.x-1)/block.x, (ny + block.y-1)/block.y ) ;
  //cudaDeviceProp GPUprop;
  //cudaGetDeviceProperties(&GPUprop,0);
@@ -124,12 +151,13 @@ int main( int argc, char *argv[] ) {
  //printf("gridx is %d\n",grid);
  //printf("gridx is %d and grid y is %d\n",grid.x,grid.y);
 
- f_addmat<<<grid, block>>>( d_A, d_B, d_C, nx, ny ) ;
+ f_addmat<<<grid, block>>>( d_A, d_B, nx, ny/*, pitchA/(sizeof(float))*/ ) ;
  cudaDeviceSynchronize() ;
 
  double timeStampC = getTimeStamp() ;
  //copy data back
- cudaMemcpy( h_dC, d_C, bytes, cudaMemcpyDeviceToHost ) ;
+ cudaMemcpy( h_dC, d_B, bytes, cudaMemcpyDeviceToHost ) ;
+ //cudaMemcpy2D( h_ddC, pitchB, d_B,ny*sizeof(float),ny*sizeof(float),nx,cudaMemcpyDeviceToHost ) ;
  double timeStampD = getTimeStamp() ;
 
  // free GPU resources
@@ -138,7 +166,14 @@ int main( int argc, char *argv[] ) {
 
  // check result
  h_addmat( h_A, h_B, h_hC, nx, ny ) ;
- 
+
+ //for(int i = 0; i < nx; i++){
+ // for(int j = 0; j < pitchC/4; j++){
+ //  if(j<ny){
+ //   h_dC[i*ny+j] = h_ddC[i*pitchC/4+j];
+ //  }
+ // }
+ //} 
  // print out results
  if(!memcmp(h_hC,h_dC,nx*ny*sizeof(float))){
   //debugPrint(h_hC, nx, ny);
@@ -149,8 +184,8 @@ int main( int argc, char *argv[] ) {
   fclose(fptr);
   printf("%.6f %.6f %.6f %.6f\n", timeStampD-timeStampA, timeStampB-timeStampA, timeStampC-timeStampB, timeStampD-timeStampC);
  }else{
-  debugPrint(h_hC, nx, ny);
-  debugPrint(h_dC, nx, ny);
+  //debugPrint(h_hC, nx, ny);
+  //debugPrint(h_dC, nx, ny);
   printf("Error: function failed.\n");
  }
 }

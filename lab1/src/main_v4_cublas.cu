@@ -5,14 +5,32 @@
 #include <stdlib.h>
 //TODO: could include later
 //#include <device_launch_parameters.h>
-#include <cuda_runtime.h>
 //#include "../inc/helper_cuda.h"
+// CUDA runtime
+#include <cuda_runtime.h>
+#include <cublas_v2.h>
+
+// CUDA and CUBLAS functions
+#include "../inc/helper_functions.h"
+#include "../inc/helper_cuda.h"
 
 // time stamp function in seconds
 double getTimeStamp() {
  struct timeval tv ;
  gettimeofday( &tv, NULL ) ;
  return (double) tv.tv_usec/1000000 + tv.tv_sec ;
+}
+void initDataI(float* data, int len){ 
+ int i,j;
+ for(i = 0; i < len; i++){
+  for(j = 0; j < len; j++){
+   if(i==j){
+    data[i*len + j] = (float) 1.0; 
+   }else{
+    data[i*len + j] = (float) 0.0;
+   }
+  }
+ }
 }
 void initDataA(float* data, int nx, int ny){ 
  int i,j;
@@ -86,6 +104,7 @@ int main( int argc, char *argv[] ) {
  // but you may want to pad the matrices…
 
  // alloc memory host-side
+ //float *h_I = (float *) malloc( nx*nx*sizeof(float) ) ;
  float *h_A = (float *) malloc( bytes ) ;
  float *h_B = (float *) malloc( bytes ) ;
  float *h_hC = (float *) malloc( bytes ) ; // host result
@@ -95,16 +114,20 @@ int main( int argc, char *argv[] ) {
  //initData( h_A, noElems ) ; initData( h_B, noElems ) ;
  initDataA(h_A, nx, ny);
  initDataB(h_B, nx, ny);
+ //initDataI(h_I, nx);
  // alloc memory dev-side
  float *d_A, *d_B, *d_C ;
+ //float *d_I;
+ //cudaMalloc( (void **) &d_I, nx*nx*sizeof(float) ) ;
  cudaMalloc( (void **) &d_A, bytes ) ;
  cudaMalloc( (void **) &d_B, bytes ) ;
  cudaMalloc( (void **) &d_C, bytes ) ;
 
  double timeStampA = getTimeStamp() ;
  //transfer data to dev
- //cudaMemcpy( d_A, h_A, bytes, cudaMemcpyHostToDevice ) ;
- //cudaMemcpy( d_B, h_B, bytes, cudaMemcpyHostToDevice ) ;
+ //cudaMemcpy( d_I, h_I, bytes, cudaMemcpyHostToDevice ) ;
+ cudaMemcpy( d_A, h_A, bytes, cudaMemcpyHostToDevice ) ;
+ cudaMemcpy( d_B, h_B, bytes, cudaMemcpyHostToDevice ) ;
  // note that the transfers would be twice as fast if h_A and h_B
  // matrices are pinned
  double timeStampB = getTimeStamp() ;
@@ -123,26 +146,29 @@ int main( int argc, char *argv[] ) {
  //printf("noelems is %d\n",noElems);
  //printf("gridx is %d\n",grid);
  //printf("gridx is %d and grid y is %d\n",grid.x,grid.y);
- cudaStream_t stream[grid/2+1];
- for(int i = 1; i < grid/2+1; i++){
-  cudaStreamCreate(&stream[i]);
-  cudaMemcpyAsync(&d_A[2048*(i-1)],&h_A[2048*(i-1)],2048,cudaMemcpyHostToDevice,stream[i]);
- }
+ const float a = 1.0f;
+ const float b = 1.0f;
+ cublasHandle_t handle;
+ cublasCreate(&handle);
+ //Perform warmup operation with cublas
+ cublasSgeam(handle, CUBLAS_OP_N, CUBLAS_OP_N, 
+        	 ny, nx, 
+        	 &a, 
+        	 d_A, ny,
+        	 &b,
+        	 d_B, ny, 
+        	 d_C, ny);
+ ////Perform warmup operation with cublas
+ //cublasSgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N, 
+ //       	 ny, nx, nx, 
+ //       	 &a, 
+ //       	 d_A, ny,
+ //       	 d_I, nx,
+ //       	 &b, 
+ //       	 d_B, ny);
 
- for(int i = 1; i < grid/2+1; i++){
-  cudaStreamSynchronize(stream[i]);
- }
- 
- f_addmat<<<grid, block>>>( d_A, d_B, d_C, nx, ny ) ;
- cudaDeviceSynchronize() ;
- 
- //for(int i = 1; i < grid/2+1; i++){
- // cudaMemcpyAsync(&h_dC[2048*(i-1)], &d_C[2048*(i-1)], 2048, cudaMemcpyDeviceToHost, stream[i]);
- //}
-
- //for(int i = 1; i < grid/2+1; i++){
- // cudaStreamSynchronize(stream[i]);
- //}
+ //f_addmat<<<grid, block>>>( d_A, d_B, d_C, nx, ny ) ;
+ //cudaDeviceSynchronize() ;
 
  double timeStampC = getTimeStamp() ;
  //copy data back
@@ -166,8 +192,9 @@ int main( int argc, char *argv[] ) {
   fclose(fptr);
   printf("%.6f %.6f %.6f %.6f\n", timeStampD-timeStampA, timeStampB-timeStampA, timeStampC-timeStampB, timeStampD-timeStampC);
  }else{
-  debugPrint(h_hC, nx, ny);
-  debugPrint(h_dC, nx, ny);
+  //debugPrint(h_I, nx, nx);
+  //debugPrint(h_hC, nx, ny);
+  //debugPrint(h_dC, nx, ny);
   printf("Error: function failed.\n");
  }
 }
