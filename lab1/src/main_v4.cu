@@ -6,7 +6,7 @@
 //#include <device_launch_parameters.h>
 #include <cuda_runtime.h>
 //#include "../inc/helper_cuda.h"
-
+#define NUM_STREAMS 4 
 // time stamp function in seconds
 double getTimeStamp() {
  struct timeval tv ;
@@ -47,7 +47,7 @@ void h_addmat(float *A, float *B, float *C, int nx, int ny){
  }
 }
 // device-side matrix addition
-__global__ void f_addmat( float *A, float *B, int nx, int ny/*, int padrow*/){
+__global__ void f_addmat( float *A, float *B, int len/*, int padrow*/){
  // kernel code might look something like this
  // but you may want to pad the matrices and index into them accordingly
  //__shared__ float sA[32][32];
@@ -80,7 +80,7 @@ __global__ void f_addmat( float *A, float *B, int nx, int ny/*, int padrow*/){
   //memcpy(&B[idx],tmpB,size);
   //printf("sidx is %d, idx is %d, size is %d\n", sidx, idx, size);
   #pragma unroll
-  for(int i = idx; i < nx*ny; i+=gridDim.x*blockDim.x*blockDim.y){
+  for(int i = idx; i < len; i+=gridDim.x*blockDim.x*blockDim.y){
    //sA[threadIdx.x][threadIdx.y] = A[i];
    //sB[threadIdx.x][threadIdx.y] = B[i];
    //__syncthreads();
@@ -103,7 +103,7 @@ int main( int argc, char *argv[] ) {
  int noElems = nx*ny ;
  int bytes = noElems * sizeof(float) ;
  // but you may want to pad the matrices…
-
+ 
  // alloc memory host-side
  float *h_A = (float *) malloc( bytes ) ;
  float *h_B = (float *) malloc( bytes ) ;
@@ -114,6 +114,7 @@ int main( int argc, char *argv[] ) {
  //initData( h_A, noElems ) ; initData( h_B, noElems ) ;
  initDataA(h_A, nx, ny);
  initDataB(h_B, nx, ny);
+
  // alloc memory dev-side
  float *d_A, *d_B, *d_C ;
  cudaMalloc( (void **) &d_A, bytes ) ;
@@ -127,8 +128,8 @@ int main( int argc, char *argv[] ) {
  cudaDeviceSetCacheConfig(cudaFuncCachePreferL1);
  double timeStampA = getTimeStamp() ;
  //transfer data to dev
- cudaMemcpy( d_A, h_A, bytes, cudaMemcpyHostToDevice ) ;
- cudaMemcpy( d_B, h_B, bytes, cudaMemcpyHostToDevice ) ;
+ //cudaMemcpy( d_A, h_A, bytes, cudaMemcpyHostToDevice ) ;
+ //cudaMemcpy( d_B, h_B, bytes, cudaMemcpyHostToDevice ) ;
  //printf("pA is %d and pB is %d\n",pitchA,pitchB);
  //cudaMemcpy2D( d_A, pitchA, h_A,ny*sizeof(float),ny*sizeof(float),nx,cudaMemcpyHostToDevice ) ;
  //cudaMemcpy2D( d_B, pitchB, h_B,ny*sizeof(float),ny*sizeof(float),nx,cudaMemcpyHostToDevice ) ;
@@ -140,7 +141,8 @@ int main( int argc, char *argv[] ) {
  dim3 block( 32, 32 ) ; // you will want to configure this
  //int block = 64;
  //int grid = (noElems + block-1)/block;
- int grid = ((noElems+3)/4 + block.x*block.y-1)/(block.x*block.y);
+ //int grid = ((noElems+3)/4 + block.x*block.y-1)/(block.x*block.y);
+ int grid = ((noElems/NUM_STREAMS+3)/4 + block.x*block.y-1)/(block.x*block.y);
  //int grid = (((pitchA/4*nx*sizeof(float))+3)/4 + block.x*block.y-1)/(block.x*block.y);
  //dim3 grid( (nx + block.x-1)/block.x, (ny + block.y-1)/block.y ) ;
  //cudaDeviceProp GPUprop;
@@ -148,15 +150,38 @@ int main( int argc, char *argv[] ) {
  //printf("sharedmemperblk is %d\n",GPUprop.sharedMemPerBlock);
  //printf("maxgridsize x is %d\n",GPUprop.maxGridSize[0]);
  //printf("noelems is %d\n",noElems);
- //printf("gridx is %d\n",grid);
+ //printf("grid is %d\n",grid);
  //printf("gridx is %d and grid y is %d\n",grid.x,grid.y);
 
- f_addmat<<<grid, block>>>( d_A, d_B, nx, ny/*, pitchA/(sizeof(float))*/ ) ;
- cudaDeviceSynchronize() ;
+ //f_addmat<<<grid, block>>>( d_A, d_B, nx, ny/*, pitchA/(sizeof(float))*/ ) ;
+ //cudaDeviceSynchronize() ;
 
+ cudaStream_t stream[NUM_STREAMS+1];
+ for (int i = 1; i < NUM_STREAMS+1; i++){
+  cudaStreamCreate(&(stream[i]));
+ }
+
+ for(int i = 1; i < NUM_STREAMS; i++){
+  cudaMemcpyAsync(&d_A[(i-1)*nx*ny/NUM_STREAMS],&h_A[(i-1)*nx*ny/NUM_STREAMS],(noElems*sizeof(float))/NUM_STREAMS,cudaMemcpyHostToDevice,stream[i]);
+  cudaMemcpyAsync(&d_B[(i-1)*nx*ny/NUM_STREAMS],&h_B[(i-1)*nx*ny/NUM_STREAMS],(noElems*sizeof(float))/NUM_STREAMS,cudaMemcpyHostToDevice,stream[i]);
+  //printf("index is %d, num is %d\n",(i-1)*nx*ny/NUM_STREAMS,nx*ny/NUM_STREAMS );
+  f_addmat<<<grid, block, 0, stream[i]>>>( d_A+(i-1)*nx*ny/NUM_STREAMS, d_B+(i-1)*nx*ny/NUM_STREAMS,nx*ny/NUM_STREAMS) ;
+  cudaMemcpyAsync(&h_dC[(i-1)*nx*ny/NUM_STREAMS],&d_B[(i-1)*nx*ny/NUM_STREAMS],(noElems*sizeof(float))/NUM_STREAMS,cudaMemcpyDeviceToHost,stream[i]);
+ }
+ grid =((noElems-(NUM_STREAMS-1)*noElems/NUM_STREAMS+3)/4+ block.x*block.y-1)/(block.x*block.y);
+ //printf("grid final is %d\n",grid);
+ //printf("index is %d, num is %d\n",(NUM_STREAMS-1)*nx*ny/NUM_STREAMS,nx*ny-(NUM_STREAMS-1)*nx*ny/NUM_STREAMS);
+ cudaMemcpyAsync(&d_A[(NUM_STREAMS-1)*nx*ny/NUM_STREAMS],&h_A[(NUM_STREAMS-1)*nx*ny/NUM_STREAMS],(nx*ny-(NUM_STREAMS-1)*nx*ny/NUM_STREAMS)*sizeof(float),cudaMemcpyHostToDevice,stream[NUM_STREAMS]);
+ cudaMemcpyAsync(&d_B[(NUM_STREAMS-1)*nx*ny/NUM_STREAMS],&h_B[(NUM_STREAMS-1)*nx*ny/NUM_STREAMS],(nx*ny-(NUM_STREAMS-1)*nx*ny/NUM_STREAMS)*sizeof(float),cudaMemcpyHostToDevice,stream[NUM_STREAMS]);
+ f_addmat<<<grid, block, 0, stream[NUM_STREAMS]>>>( d_A+(NUM_STREAMS-1)*nx*ny/NUM_STREAMS, d_B+(NUM_STREAMS-1)*nx*ny/NUM_STREAMS,nx*ny-(NUM_STREAMS-1)*nx*ny/NUM_STREAMS) ;
+ cudaMemcpyAsync(&h_dC[(NUM_STREAMS-1)*nx*ny/NUM_STREAMS],&d_B[(NUM_STREAMS-1)*nx*ny/NUM_STREAMS],(nx*ny-(NUM_STREAMS-1)*nx*ny/NUM_STREAMS)*sizeof(float),cudaMemcpyDeviceToHost,stream[NUM_STREAMS]);
+ for(int i = 0; i < NUM_STREAMS+1; i++){
+  cudaStreamSynchronize(stream[i]);
+  //printf("sync for stream %d\n",i);
+ }
  double timeStampC = getTimeStamp() ;
  //copy data back
- cudaMemcpy( h_dC, d_B, bytes, cudaMemcpyDeviceToHost ) ;
+ //cudaMemcpy( h_dC, d_B, bytes, cudaMemcpyDeviceToHost ) ;
  //cudaMemcpy2D( h_ddC, pitchB, d_B,ny*sizeof(float),ny*sizeof(float),nx,cudaMemcpyDeviceToHost ) ;
  double timeStampD = getTimeStamp() ;
 

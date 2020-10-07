@@ -94,7 +94,7 @@ int main( int argc, char *argv[] ) {
  float *d_A, *d_B, *d_C ;
  cudaHostAlloc((void**)&h_A,bytes,cudaHostAllocWriteCombined|cudaHostAllocMapped);
  cudaHostAlloc((void**)&h_B,bytes,cudaHostAllocWriteCombined|cudaHostAllocMapped);
- cudaHostAlloc((void**)&h_dC,bytes,cudaHostAllocWriteCombined|cudaHostAllocMapped);
+ cudaHostAlloc((void**)&h_dC,bytes,cudaHostAllocWriteCombined);
  cudaHostGetDevicePointer( &d_A, h_A, 0 );
  cudaHostGetDevicePointer( &d_B, h_B, 0 );
  cudaHostGetDevicePointer( &d_C, h_dC, 0 );
@@ -140,18 +140,15 @@ int main( int argc, char *argv[] ) {
  //cudaMemcpy( h_dC, d_C, bytes, cudaMemcpyDeviceToHost ) ;
  double timeStampD = getTimeStamp() ;
 
- // free GPU resources
- cudaFree( d_A ) ; cudaFree( d_B ) ; cudaFree( d_C ) ;
- cudaDeviceReset() ;
 
  // check result
  h_addmat( h_hA, h_hB, h_hC, nx, ny ) ;
  
  // print out results
  bool match = true;
- //for(int i = 0; i < nx*ny; i++){
- // if(h_hC[i]!=h_dC[i]){match=false;break;}
- //}
+ for(int i = 0; i < nx*ny; i++){
+  if(h_hC[i]!=h_dC[i]){match=false;break;}
+ }
  if(match){
   //debugPrint(h_hC, nx, ny);
   //debugPrint(h_dC, nx, ny);
@@ -165,4 +162,7 @@ int main( int argc, char *argv[] ) {
   debugPrint(h_dC, nx, ny);
   printf("Error: function failed.\n");
  }
+ // free GPU resources
+ cudaFreeHost( h_A ) ; cudaFreeHost( h_B ) ; cudaFreeHost( h_dC ) ;
+ cudaDeviceReset() ;
 }
