@@ -1,6 +1,5 @@
 #include <sys/time.h>
 #include <stdio.h>
-
 //TODO for writing to file, will be deleted
 #include <stdlib.h>
 //TODO: could include later
@@ -57,12 +56,12 @@ __global__ void f_addmat( float *A, float *B, int nx, int ny/*, int padrow*/){
 
  int ix = threadIdx.x;
  int iy = threadIdx.y*blockDim.x + blockIdx.x*blockDim.x*blockDim.y;
- int idx = (iy + ix)*4 ;
+ int idx = iy + ix ;
  //int col = idx-padrow*(int)(idx/padrow);
  //if(idx<nx*padrow && col<ny){
- if(idx<nx*ny){
+ //if(idx<gridDim.x/4*blockDim.x*blockDim.y){
   //int sidx = threadIdx.y*blockDim.x + threadIdx.x;
-  int size = ((nx*ny-idx)<4) ? (nx*ny-idx) : 4;
+  //int size = ((nx*ny-idx)<4) ? (nx*ny-idx) : 4;
   //int size=4;
   //if((ny-col)<4){
   // size = ny-col;
@@ -81,7 +80,7 @@ __global__ void f_addmat( float *A, float *B, int nx, int ny/*, int padrow*/){
   //memcpy(&B[idx],tmpB,size);
   //printf("sidx is %d, idx is %d, size is %d\n", sidx, idx, size);
   #pragma unroll
-  for(int i = idx; i < idx + size; i++){
+  for(int i = idx; i < nx*ny; i+=gridDim.x*blockDim.x*blockDim.y){
    //sA[threadIdx.x][threadIdx.y] = A[i];
    //sB[threadIdx.x][threadIdx.y] = B[i];
    //__syncthreads();
@@ -91,7 +90,7 @@ __global__ void f_addmat( float *A, float *B, int nx, int ny/*, int padrow*/){
    //printf("index %d\n",i);
    B[i] += A[i];
   }
- }
+ //}
 }
 int main( int argc, char *argv[] ) {
  // get program arguments

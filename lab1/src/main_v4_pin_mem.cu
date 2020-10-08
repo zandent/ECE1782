@@ -95,9 +95,9 @@ int main( int argc, char *argv[] ) {
  cudaHostAlloc((void**)&h_A,bytes,cudaHostAllocWriteCombined|cudaHostAllocMapped);
  cudaHostAlloc((void**)&h_B,bytes,cudaHostAllocWriteCombined|cudaHostAllocMapped);
  cudaHostAlloc((void**)&h_dC,bytes,cudaHostAllocWriteCombined);
- cudaHostGetDevicePointer( &d_A, h_A, 0 );
- cudaHostGetDevicePointer( &d_B, h_B, 0 );
- cudaHostGetDevicePointer( &d_C, h_dC, 0 );
+ //cudaHostGetDevicePointer( &d_A, h_A, 0 );
+ //cudaHostGetDevicePointer( &d_B, h_B, 0 );
+ //cudaHostGetDevicePointer( &d_C, h_dC, 0 );
  // init matrices with random data
  //initData( h_A, noElems ) ; initData( h_B, noElems ) ;
  initDataA(h_A, nx, ny);
@@ -105,14 +105,14 @@ int main( int argc, char *argv[] ) {
  initDataA(h_hA, nx, ny);
  initDataB(h_hB, nx, ny);
  // alloc memory dev-side
- //cudaMalloc( (void **) &d_A, bytes ) ;
- //cudaMalloc( (void **) &d_B, bytes ) ;
- //cudaMalloc( (void **) &d_C, bytes ) ;
+ cudaMalloc( (void **) &d_A, bytes ) ;
+ cudaMalloc( (void **) &d_B, bytes ) ;
+ cudaMalloc( (void **) &d_C, bytes ) ;
 
  double timeStampA = getTimeStamp() ;
  //transfer data to dev
- //cudaMemcpy( d_A, h_A, bytes, cudaMemcpyHostToDevice ) ;
- //cudaMemcpy( d_B, h_B, bytes, cudaMemcpyHostToDevice ) ;
+ cudaMemcpy( d_A, h_A, bytes, cudaMemcpyHostToDevice ) ;
+ cudaMemcpy( d_B, h_B, bytes, cudaMemcpyHostToDevice ) ;
  // note that the transfers would be twice as fast if h_A and h_B
  // matrices are pinned
  double timeStampB = getTimeStamp() ;
@@ -137,7 +137,7 @@ int main( int argc, char *argv[] ) {
 
  double timeStampC = getTimeStamp() ;
  //copy data back
- //cudaMemcpy( h_dC, d_C, bytes, cudaMemcpyDeviceToHost ) ;
+ cudaMemcpy( h_dC, d_C, bytes, cudaMemcpyDeviceToHost ) ;
  double timeStampD = getTimeStamp() ;
 
 
@@ -145,11 +145,7 @@ int main( int argc, char *argv[] ) {
  h_addmat( h_hA, h_hB, h_hC, nx, ny ) ;
  
  // print out results
- bool match = true;
- for(int i = 0; i < nx*ny; i++){
-  if(h_hC[i]!=h_dC[i]){match=false;break;}
- }
- if(match){
+ if(!memcmp(h_hC,h_dC,nx*ny*sizeof(float))){
   //debugPrint(h_hC, nx, ny);
   //debugPrint(h_dC, nx, ny);
   FILE* fptr;

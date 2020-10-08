@@ -105,31 +105,32 @@ int main( int argc, char *argv[] ) {
  // but you may want to pad the matrices…
  
  // alloc memory host-side
- float *h_A = (float *) malloc( bytes ) ;
- float *h_B = (float *) malloc( bytes ) ;
+ float *h_hA = (float *) malloc( bytes ) ;
+ float *h_hB = (float *) malloc( bytes ) ;
  float *h_hC = (float *) malloc( bytes ) ; // host result
- float *h_dC = (float *) malloc( bytes ) ; // gpu result
-
+ //float *h_dC = (float *) malloc( bytes ) ; // gpu result
+ float *h_A, *h_B, *h_dC;
+ float *d_A, *d_B ;
+ cudaHostAlloc((void**)&h_A,bytes,cudaHostAllocWriteCombined|cudaHostAllocMapped);
+ cudaHostAlloc((void**)&h_B,bytes,cudaHostAllocWriteCombined|cudaHostAllocMapped);
+ cudaHostAlloc((void**)&h_dC,bytes,cudaHostAllocWriteCombined);
+ //cudaHostGetDevicePointer( &d_A, h_A, 0 );
+ //cudaHostGetDevicePointer( &d_B, h_B, 0 );
+ //cudaHostGetDevicePointer( &d_C, h_dC, 0 );
  // init matrices with random data
  //initData( h_A, noElems ) ; initData( h_B, noElems ) ;
  initDataA(h_A, nx, ny);
  initDataB(h_B, nx, ny);
-
+ initDataA(h_hA, nx, ny);
+ initDataB(h_hB, nx, ny);
  // alloc memory dev-side
- float *d_A, *d_B, *d_C ;
  cudaMalloc( (void **) &d_A, bytes ) ;
  cudaMalloc( (void **) &d_B, bytes ) ;
- //size_t pitchA,pitchB, pitchC;
- //cudaMallocPitch(&d_A,&pitchA,ny*sizeof(float),nx);
- //cudaMallocPitch(&d_B,&pitchB,ny*sizeof(float),nx);
- //cudaMallocPitch(&d_C,&pitchC,ny*sizeof(float),nx);
- //float *h_ddC = (float *) malloc(nx*pitchC);
- cudaMalloc( (void **) &d_C, bytes ) ;
  cudaDeviceSetCacheConfig(cudaFuncCachePreferL1);
  double timeStampA = getTimeStamp() ;
  //transfer data to dev
- //cudaMemcpy( d_A, h_A, bytes, cudaMemcpyHostToDevice ) ;
- //cudaMemcpy( d_B, h_B, bytes, cudaMemcpyHostToDevice ) ;
+ cudaMemcpy( d_A, h_A, bytes, cudaMemcpyHostToDevice ) ;
+ cudaMemcpy( d_B, h_B, bytes, cudaMemcpyHostToDevice ) ;
  //printf("pA is %d and pB is %d\n",pitchA,pitchB);
  //cudaMemcpy2D( d_A, pitchA, h_A,ny*sizeof(float),ny*sizeof(float),nx,cudaMemcpyHostToDevice ) ;
  //cudaMemcpy2D( d_B, pitchB, h_B,ny*sizeof(float),ny*sizeof(float),nx,cudaMemcpyHostToDevice ) ;
@@ -141,8 +142,8 @@ int main( int argc, char *argv[] ) {
  dim3 block( 32, 32 ) ; // you will want to configure this
  //int block = 64;
  //int grid = (noElems + block-1)/block;
- //int grid = ((noElems+3)/4 + block.x*block.y-1)/(block.x*block.y);
- int grid = ((noElems/NUM_STREAMS+3)/4 + block.x*block.y-1)/(block.x*block.y);
+ int grid = ((noElems+3)/4 + block.x*block.y-1)/(block.x*block.y);
+ //int grid = ((noElems/NUM_STREAMS+3)/4 + block.x*block.y-1)/(block.x*block.y);
  //int grid = (((pitchA/4*nx*sizeof(float))+3)/4 + block.x*block.y-1)/(block.x*block.y);
  //dim3 grid( (nx + block.x-1)/block.x, (ny + block.y-1)/block.y ) ;
  //cudaDeviceProp GPUprop;
@@ -162,35 +163,32 @@ int main( int argc, char *argv[] ) {
  }
 
  for(int i = 1; i < NUM_STREAMS; i++){
-  cudaMemcpyAsync(&d_A[(i-1)*nx*ny/NUM_STREAMS],&h_A[(i-1)*nx*ny/NUM_STREAMS],(noElems*sizeof(float))/NUM_STREAMS,cudaMemcpyHostToDevice,stream[i]);
-  cudaMemcpyAsync(&d_B[(i-1)*nx*ny/NUM_STREAMS],&h_B[(i-1)*nx*ny/NUM_STREAMS],(noElems*sizeof(float))/NUM_STREAMS,cudaMemcpyHostToDevice,stream[i]);
+  //cudaMemcpyAsync(&d_A[(i-1)*nx*ny/NUM_STREAMS],&h_A[(i-1)*nx*ny/NUM_STREAMS],(noElems*sizeof(float))/NUM_STREAMS,cudaMemcpyHostToDevice,stream[i]);
+  //cudaMemcpyAsync(&d_B[(i-1)*nx*ny/NUM_STREAMS],&h_B[(i-1)*nx*ny/NUM_STREAMS],(noElems*sizeof(float))/NUM_STREAMS,cudaMemcpyHostToDevice,stream[i]);
   //printf("index is %d, num is %d\n",(i-1)*nx*ny/NUM_STREAMS,nx*ny/NUM_STREAMS );
   f_addmat<<<grid, block, 0, stream[i]>>>( d_A+(i-1)*nx*ny/NUM_STREAMS, d_B+(i-1)*nx*ny/NUM_STREAMS,nx*ny/NUM_STREAMS) ;
-  cudaMemcpyAsync(&h_dC[(i-1)*nx*ny/NUM_STREAMS],&d_B[(i-1)*nx*ny/NUM_STREAMS],(noElems*sizeof(float))/NUM_STREAMS,cudaMemcpyDeviceToHost,stream[i]);
+  //cudaMemcpyAsync(&h_dC[(i-1)*nx*ny/NUM_STREAMS],&d_B[(i-1)*nx*ny/NUM_STREAMS],(noElems*sizeof(float))/NUM_STREAMS,cudaMemcpyDeviceToHost,stream[i]);
  }
- grid =((noElems-(NUM_STREAMS-1)*noElems/NUM_STREAMS+3)/4+ block.x*block.y-1)/(block.x*block.y);
+ //grid =((noElems-(NUM_STREAMS-1)*noElems/NUM_STREAMS+3)/4+ block.x*block.y-1)/(block.x*block.y);
  //printf("grid final is %d\n",grid);
  //printf("index is %d, num is %d\n",(NUM_STREAMS-1)*nx*ny/NUM_STREAMS,nx*ny-(NUM_STREAMS-1)*nx*ny/NUM_STREAMS);
- cudaMemcpyAsync(&d_A[(NUM_STREAMS-1)*nx*ny/NUM_STREAMS],&h_A[(NUM_STREAMS-1)*nx*ny/NUM_STREAMS],(nx*ny-(NUM_STREAMS-1)*nx*ny/NUM_STREAMS)*sizeof(float),cudaMemcpyHostToDevice,stream[NUM_STREAMS]);
- cudaMemcpyAsync(&d_B[(NUM_STREAMS-1)*nx*ny/NUM_STREAMS],&h_B[(NUM_STREAMS-1)*nx*ny/NUM_STREAMS],(nx*ny-(NUM_STREAMS-1)*nx*ny/NUM_STREAMS)*sizeof(float),cudaMemcpyHostToDevice,stream[NUM_STREAMS]);
+ //cudaMemcpyAsync(&d_A[(NUM_STREAMS-1)*nx*ny/NUM_STREAMS],&h_A[(NUM_STREAMS-1)*nx*ny/NUM_STREAMS],(nx*ny-(NUM_STREAMS-1)*nx*ny/NUM_STREAMS)*sizeof(float),cudaMemcpyHostToDevice,stream[NUM_STREAMS]);
+ //cudaMemcpyAsync(&d_B[(NUM_STREAMS-1)*nx*ny/NUM_STREAMS],&h_B[(NUM_STREAMS-1)*nx*ny/NUM_STREAMS],(nx*ny-(NUM_STREAMS-1)*nx*ny/NUM_STREAMS)*sizeof(float),cudaMemcpyHostToDevice,stream[NUM_STREAMS]);
  f_addmat<<<grid, block, 0, stream[NUM_STREAMS]>>>( d_A+(NUM_STREAMS-1)*nx*ny/NUM_STREAMS, d_B+(NUM_STREAMS-1)*nx*ny/NUM_STREAMS,nx*ny-(NUM_STREAMS-1)*nx*ny/NUM_STREAMS) ;
- cudaMemcpyAsync(&h_dC[(NUM_STREAMS-1)*nx*ny/NUM_STREAMS],&d_B[(NUM_STREAMS-1)*nx*ny/NUM_STREAMS],(nx*ny-(NUM_STREAMS-1)*nx*ny/NUM_STREAMS)*sizeof(float),cudaMemcpyDeviceToHost,stream[NUM_STREAMS]);
- for(int i = 0; i < NUM_STREAMS+1; i++){
+ //cudaMemcpyAsync(&h_dC[(NUM_STREAMS-1)*nx*ny/NUM_STREAMS],&d_B[(NUM_STREAMS-1)*nx*ny/NUM_STREAMS],(nx*ny-(NUM_STREAMS-1)*nx*ny/NUM_STREAMS)*sizeof(float),cudaMemcpyDeviceToHost,stream[NUM_STREAMS]);
+ for(int i = 1; i < NUM_STREAMS+1; i++){
   cudaStreamSynchronize(stream[i]);
-  //printf("sync for stream %d\n",i);
  }
+ //f_addmat<<<grid, block>>>( d_A, d_B, nx*ny/*, pitchA/(sizeof(float))*/ ) ;
+ //cudaDeviceSynchronize() ;
  double timeStampC = getTimeStamp() ;
  //copy data back
- //cudaMemcpy( h_dC, d_B, bytes, cudaMemcpyDeviceToHost ) ;
+ cudaMemcpy( h_dC, d_B, bytes, cudaMemcpyDeviceToHost ) ;
  //cudaMemcpy2D( h_ddC, pitchB, d_B,ny*sizeof(float),ny*sizeof(float),nx,cudaMemcpyDeviceToHost ) ;
  double timeStampD = getTimeStamp() ;
 
- // free GPU resources
- cudaFree( d_A ) ; cudaFree( d_B ) ; cudaFree( d_C ) ;
- cudaDeviceReset() ;
-
  // check result
- h_addmat( h_A, h_B, h_hC, nx, ny ) ;
+ h_addmat( h_hA, h_hB, h_hC, nx, ny ) ;
 
  //for(int i = 0; i < nx; i++){
  // for(int j = 0; j < pitchC/4; j++){
@@ -213,4 +211,7 @@ int main( int argc, char *argv[] ) {
   //debugPrint(h_dC, nx, ny);
   printf("Error: function failed.\n");
  }
+ // free GPU resources
+ cudaFreeHost( h_A ) ; cudaFreeHost( h_B ) ; cudaFreeHost( h_dC ) ;
+ cudaDeviceReset() ;
 }

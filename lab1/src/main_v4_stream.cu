@@ -175,7 +175,7 @@ int main( int argc, char *argv[] ) {
  cudaMemcpyAsync(&d_B[(NUM_STREAMS-1)*nx*ny/NUM_STREAMS],&h_B[(NUM_STREAMS-1)*nx*ny/NUM_STREAMS],(nx*ny-(NUM_STREAMS-1)*nx*ny/NUM_STREAMS)*sizeof(float),cudaMemcpyHostToDevice,stream[NUM_STREAMS]);
  f_addmat<<<grid, block, 0, stream[NUM_STREAMS]>>>( d_A+(NUM_STREAMS-1)*nx*ny/NUM_STREAMS, d_B+(NUM_STREAMS-1)*nx*ny/NUM_STREAMS,nx*ny-(NUM_STREAMS-1)*nx*ny/NUM_STREAMS) ;
  cudaMemcpyAsync(&h_dC[(NUM_STREAMS-1)*nx*ny/NUM_STREAMS],&d_B[(NUM_STREAMS-1)*nx*ny/NUM_STREAMS],(nx*ny-(NUM_STREAMS-1)*nx*ny/NUM_STREAMS)*sizeof(float),cudaMemcpyDeviceToHost,stream[NUM_STREAMS]);
- for(int i = 0; i < NUM_STREAMS+1; i++){
+ for(int i = 1; i < NUM_STREAMS+1; i++){
   cudaStreamSynchronize(stream[i]);
   //printf("sync for stream %d\n",i);
  }
