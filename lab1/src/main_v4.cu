@@ -151,6 +151,9 @@ int main( int argc, char *argv[] ) {
  //printf("sharedmemperblk is %d\n",GPUprop.sharedMemPerBlock);
  //printf("maxgridsize x is %d\n",GPUprop.maxGridSize[0]);
  //printf("noelems is %d\n",noElems);
+ //printf("prev num is %d\n",noElems/NUM_STREAMS);
+ //printf("align num is %d\n",noElems/NUM_STREAMS-(noElems/NUM_STREAMS)%8);
+ int align_idx = noElems/NUM_STREAMS-(noElems/NUM_STREAMS)%8;
  //printf("grid is %d\n",grid);
  //printf("gridx is %d and grid y is %d\n",grid.x,grid.y);
 
@@ -166,15 +169,15 @@ int main( int argc, char *argv[] ) {
   //cudaMemcpyAsync(&d_A[(i-1)*nx*ny/NUM_STREAMS],&h_A[(i-1)*nx*ny/NUM_STREAMS],(noElems*sizeof(float))/NUM_STREAMS,cudaMemcpyHostToDevice,stream[i]);
   //cudaMemcpyAsync(&d_B[(i-1)*nx*ny/NUM_STREAMS],&h_B[(i-1)*nx*ny/NUM_STREAMS],(noElems*sizeof(float))/NUM_STREAMS,cudaMemcpyHostToDevice,stream[i]);
   //printf("index is %d, num is %d\n",(i-1)*nx*ny/NUM_STREAMS,nx*ny/NUM_STREAMS );
-  f_addmat<<<grid, block, 0, stream[i]>>>( d_A+(i-1)*nx*ny/NUM_STREAMS, d_B+(i-1)*nx*ny/NUM_STREAMS,nx*ny/NUM_STREAMS) ;
+  f_addmat<<<grid, block, 0, stream[i]>>>( d_A+(i-1)*align_idx, d_B+(i-1)*align_idx,align_idx) ;
   //cudaMemcpyAsync(&h_dC[(i-1)*nx*ny/NUM_STREAMS],&d_B[(i-1)*nx*ny/NUM_STREAMS],(noElems*sizeof(float))/NUM_STREAMS,cudaMemcpyDeviceToHost,stream[i]);
  }
- //grid =((noElems-(NUM_STREAMS-1)*noElems/NUM_STREAMS+3)/4+ block.x*block.y-1)/(block.x*block.y);
+ grid =((noElems-(NUM_STREAMS-1)*align_idx+3)/4+ block.x*block.y-1)/(block.x*block.y);
  //printf("grid final is %d\n",grid);
  //printf("index is %d, num is %d\n",(NUM_STREAMS-1)*nx*ny/NUM_STREAMS,nx*ny-(NUM_STREAMS-1)*nx*ny/NUM_STREAMS);
  //cudaMemcpyAsync(&d_A[(NUM_STREAMS-1)*nx*ny/NUM_STREAMS],&h_A[(NUM_STREAMS-1)*nx*ny/NUM_STREAMS],(nx*ny-(NUM_STREAMS-1)*nx*ny/NUM_STREAMS)*sizeof(float),cudaMemcpyHostToDevice,stream[NUM_STREAMS]);
  //cudaMemcpyAsync(&d_B[(NUM_STREAMS-1)*nx*ny/NUM_STREAMS],&h_B[(NUM_STREAMS-1)*nx*ny/NUM_STREAMS],(nx*ny-(NUM_STREAMS-1)*nx*ny/NUM_STREAMS)*sizeof(float),cudaMemcpyHostToDevice,stream[NUM_STREAMS]);
- f_addmat<<<grid, block, 0, stream[NUM_STREAMS]>>>( d_A+(NUM_STREAMS-1)*nx*ny/NUM_STREAMS, d_B+(NUM_STREAMS-1)*nx*ny/NUM_STREAMS,nx*ny-(NUM_STREAMS-1)*nx*ny/NUM_STREAMS) ;
+ f_addmat<<<grid, block, 0, stream[NUM_STREAMS]>>>( d_A+(NUM_STREAMS-1)*align_idx, d_B+(NUM_STREAMS-1)*align_idx,noElems-(NUM_STREAMS-1)*align_idx) ;
  //cudaMemcpyAsync(&h_dC[(NUM_STREAMS-1)*nx*ny/NUM_STREAMS],&d_B[(NUM_STREAMS-1)*nx*ny/NUM_STREAMS],(nx*ny-(NUM_STREAMS-1)*nx*ny/NUM_STREAMS)*sizeof(float),cudaMemcpyDeviceToHost,stream[NUM_STREAMS]);
  for(int i = 1; i < NUM_STREAMS+1; i++){
   cudaStreamSynchronize(stream[i]);
@@ -199,6 +202,7 @@ int main( int argc, char *argv[] ) {
  //} 
  // print out results
  if(!memcmp(h_hC,h_dC,nx*ny*sizeof(float))){
+ //if(1){
   //debugPrint(h_hC, nx, ny);
   //debugPrint(h_dC, nx, ny);
   FILE* fptr;
