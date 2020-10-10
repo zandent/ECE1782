@@ -1,11 +1,12 @@
 #include <sys/time.h>
 #include <stdio.h>
 #include <cuda_runtime.h>
-#define NUM_STREAMS 8 
+#define NUM_STREAMS 4 
 //For time log by callback function
-double timeStampB;
-double timeStampC;
-double timeStampD;
+double timeStampB=0;
+double timeStampC=0;
+double timeStampD=0;
+double timeKernal=0;
 // time stamp function in seconds
 double getTimeStamp() {
  struct timeval tv ;
@@ -14,10 +15,12 @@ double getTimeStamp() {
 }
 //The three callback functions are used to called when finishing memcpyasyc and kernal completion
 void myCallBackB(cudaStream_t stream,cudaError_t status, void*  userData ){
- timeStampB=getTimeStamp();
+ timeStampB = getTimeStamp();
 }
 void myCallBackC(cudaStream_t stream,cudaError_t status, void*  userData ){
- timeStampC=getTimeStamp();
+ timeStampC = getTimeStamp();
+ //Through looking nvvp graph, the kernal executation is non-overlap and totally spread out. So I got each timeStampC-timeStampB for each kernal and take a sum
+ timeKernal += timeStampC-timeStampB;
 }
 void myCallBackD(cudaStream_t stream,cudaError_t status, void*  userData ){
  timeStampD=getTimeStamp();
@@ -59,10 +62,13 @@ void h_addmat(float *A, float *B, float *C, int nx, int ny){
  }
 }
 // device-side matrix addition
-__global__ void f_addmat( float *A, float *B, int len/*, int padrow*/){
+__global__ void f_addmat( float *A, float *B, int len){
  int ix = threadIdx.x;
  int iy = threadIdx.y*blockDim.x + blockIdx.x*blockDim.x*blockDim.y;
  int idx = iy + ix ;
+ //for loop will be unrolled
+ //stride loop access 4 elements, the stride is one grid size since the kernal's grid is 1/4 of total size per stream
+ //assign B = B + A then I dont need access the third matrix C to save time.
  #pragma unroll
  for(int i = idx; i < len; i+=gridDim.x*blockDim.x*blockDim.y){
   B[i] += A[i];
@@ -151,14 +157,9 @@ int main( int argc, char *argv[] ) {
 
  // print out results
  if(!memcmp(h_hC,h_dC,nx*ny*sizeof(float))){//results compare
-  //debugPrint(h_hC, nx, ny);
-  //debugPrint(h_dC, nx, ny);
-  //FILE* fptr;
-  //fptr = fopen("time.log","a");
-  //fprintf(fptr,"%dX%d %.6f %.6f %.6f %.6f\n", nx, ny, timeStampD-timeStampA, timeStampB-timeStampA, timeStampC-timeStampB, timeStampD-timeStampC);
-  //fclose(fptr);
-  printf("%.6f %.6f %.6f %.6f\n", timeStampD-timeStampA, timeStampB-timeStampA, timeStampC-timeStampB, timeStampD-timeStampC);
+  printf("%.6f %.6f %.6f %.6f\n", timeStampD-timeStampA, timeStampB-timeStampA, timeKernal, timeStampD-timeStampC);
  }else{
+  //for debug print
   //debugPrint(h_hC, nx, ny);
   //debugPrint(h_dC, nx, ny);
   printf("Error: Results not matched.\n");
