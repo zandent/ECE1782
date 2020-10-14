@@ -1,0 +1,26 @@
+ Consider the following code for "Jacobi relaxation".  For each element, a function of the neighboring values (defined by a "stencil") is calculated.
+
+
+    float a[n,n,n], b[n,n,n];
+    for (i=1; i<n-1; i++)
+        for (j=1; j<n-1; j++)
+            for (k=1; k<n-1; k++) {
+                a[i,j,k]=0.8*(b[i-1,j,k]+b[i+1,j,k]+b[i,j-1,k]+b[i,j+1,k]+b[i,j,k-1]+b[i,j,k+1]);
+            }
+
+
+Your program should have one argument which specifies the size n.
+Then,  each element of the input cube, b, should be initialized, CPU-side, as follows: b[i][j][k] =  (i+j+k)*1.1. (Of course, in real life, you would input the cube b.)
+The code above should run as a kernel GPU-side.
+Cube a should then be transferred to CPU memory, and checked for correctness.
+
+Your program should output one line with two numbers on it separated by a blank:
+
+1.The sum over all elements of the cube of  a[i][j][k] * ((i+j+k)?1:-1) using printf format "%lf".
+2.The aggregate time it took for your kernel to (i) transfer b to the GPU, (ii) execute your kernel, and (iii) transfer a back to the CPU, in milliseconds, properly rounded to an integer. The time taken for the following should not be included:
+	1).initialization of b
+	2).computation of the sum in (i) above 
+	3).checking correctness of a
+Your goal should make GPU implementation of this algorithm as fast as possible.
+
+The code you submit should fit in 1 file that is to be uploaded here. The name of the file should be <student_number>.cu.
