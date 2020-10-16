@@ -79,17 +79,11 @@ float h_sum(float *data, int n){
  return ret;
 }
 __device__ void globalToShared(float *sm, float *b, int l, int n, int smx, int smy, int ix, int iy){
-  //printf("smx %d, smy %d, ix %d, iy %d\n",smx,smy,ix,iy);
   sm[smx+smy*(blockDim.x+2)] = b[ix + iy*n + l*n*n];
-  //printf("sm is %lf\n",sm[smx+smy*blockDim.x]);
   if(smx==1){
-   //if(smy==1&&l==1)
-   // printf("smx1 layer inner b is %lf\n",b[ix+1+iy*n+l*n*n]);
    sm[0+smy*(blockDim.x+2)] = b[ix-1 + iy*n + l*n*n];
   }
   if(smx==blockDim.x || ix==n-2){
-  //if(smy==1&&l==1)
-  // printf("layer inner b is %lf\n",b[ix+1+iy*n+l*n*n]);
    sm[smx+1+smy*(blockDim.x+2)] = b[ix+1 + iy*n + l*n*n];
   }
   if(smy==1){
@@ -108,69 +102,26 @@ __global__ void kernal( float *a, float *b, int n){
  float down,up,self;
  float l1;
  if(gx<n-1&&gy<n-1){
- globalToShared(sm, b, 0, n, ix, iy, gx, gy);
- __syncthreads();
- down = sm[ix + iy*(blockDim.x+2)];
- //printf("down is %lf\n", down);
- globalToShared(sm, b, 1, n, ix, iy, gx, gy);
- __syncthreads();
- self = sm[ix + iy*(blockDim.x+2)];
- l1 = sm[ix-1 + iy*(blockDim.x+2)] + sm[ix+1 + iy*(blockDim.x+2)] + sm[ix + (iy-1)*(blockDim.x+2)] + sm[ix + (iy+1)*(blockDim.x+2)];
- //if(ix==31&&iy==1)
- //printf("layer 1 down is %lf self is %lf and l1 is %lf by %lf %lf %lf %lf\n", down, self, l1,sm[ix-1 + iy*(blockDim.x+2)] , sm[ix+1 + iy*(blockDim.x+2)] , sm[ix + (iy-1)*(blockDim.x+2)] , sm[ix + (iy+1)*(blockDim.x+2)]);
- __syncthreads();
- 
- //down = sm[ix + iy*(blockDim.x+2)];
- //globalToShared(sm, b, 2, n, ix, iy, gx, gy);
- //__syncthreads();
- //self = sm[ix + iy*blockDim.x];
- //l1 = sm[ix-1 + iy*blockDim.x] + sm[ix+1 + iy*blockDim.x] + sm[ix + (iy-1)*blockDim.x] + sm[ix + (iy+1)*blockDim.x];
- //if(ix==31&&iy==1)
- //printf("layer 2 down is %lf self is %lf and l1 is %lf by %lf %lf %lf %lf\n", down, self, l1,sm[ix-1 + iy*blockDim.x] , sm[ix+1 + iy*blockDim.x] , sm[ix + (iy-1)*blockDim.x] , sm[ix + (iy+1)*blockDim.x]);
- //globalToShared(sm, b, 3, n, ix, iy, gx, gy);
- //__syncthreads();
- //up = sm[ix + iy*blockDim.x];
- //if(ix==2&&iy==2)
- //printf("layer 2 down is %lf self is %lf and l1 is %lf up is %lf, res is %lf\n", down, self, l1, up, 0.8*(down+l1+up));
- //globalToShared(sm, b, 1, n, ix, iy, gx, gy);
- //__syncthreads();
- //self = sm[ix + iy*blockDim.x];
- //l1 = sm[ix-1 + iy*blockDim.x] + sm[ix+1 + iy*blockDim.x] + sm[ix + (iy-1)*blockDim.x] + sm[ix + (iy+1)*blockDim.x];
- //printf("self is %lf and l1 is %lf by %lf %lf %lf %lf\n", self, l1,sm[ix-1 + iy*blockDim.x] , sm[ix+1 + iy*blockDim.x] , sm[ix + (iy-1)*blockDim.x] , sm[ix + (iy+1)*blockDim.x]);
- 
- int layer;
- #pragma unroll
- for(layer = 2; layer < n; layer++){
-  //if(gx==31&&gy==1&&layer==2)
- //printf("layer self is %lf and l1 is %lf by %lf %lf %lf %lf, bx0 is %lf, by1 is %lf\n",self, l1,sm[ix-1 + iy*blockDim.x] , sm[ix+1 + iy*blockDim.x] , sm[ix + (iy-1)*blockDim.x] , sm[ix + (iy+1)*blockDim.x], b[gx-1+gy*n+layer*n*n], b[gx+(gy+1)*n+layer*n*n]);
-  globalToShared(sm, b, layer, n, ix, iy, gx, gy);
-  
-  //sm[ix+iy*blockDim.x] = b[gx + gy*n + layer*n*n];
-  //if(ix==1){
-  // sm[0+iy*blockDim.x] = b[gx-1 + gy*n + layer*n*n];
-  //}
-  //if(ix==blockDim.x){
-  // sm[ix+1+iy*blockDim.x] = b[gx+1 + gy*n + layer*n*n];
-  //}
-  //if(iy==1){
-  // sm[ix] = b[gx + (gy-1)*n + layer*n*n];
-  //}
-  //if(iy==blockDim.y){
-  // sm[ix+(iy+1)*blockDim.x] = b[gx + (gy+1)*n + layer*n*n];
-  //}
-  
+  globalToShared(sm, b, 0, n, ix, iy, gx, gy);
   __syncthreads();
-  up = sm[ix + iy*(blockDim.x+2)];
-  //if(gx==31&&gy==1&&layer==2)
-  //printf("DEBUG: self is %lf, down %lf, up %lf, l1 %lf\n",self, down,up,l1);
-  a[gx + gy*n + (layer-1)*n*n] = 0.8*(down+up+l1);
-  down = self;
-  self = up;
+  down = sm[ix + iy*(blockDim.x+2)];
+  globalToShared(sm, b, 1, n, ix, iy, gx, gy);
+  __syncthreads();
+  self = sm[ix + iy*(blockDim.x+2)];
   l1 = sm[ix-1 + iy*(blockDim.x+2)] + sm[ix+1 + iy*(blockDim.x+2)] + sm[ix + (iy-1)*(blockDim.x+2)] + sm[ix + (iy+1)*(blockDim.x+2)];
   __syncthreads();
- }
-   //if(layer==2&&ix==2&&iy==2)
-    //printf("DEBUG: down %lf, up %lf, l1 %lf\n",down,up,l1);
+  int layer;
+  #pragma unroll
+  for(layer = 2; layer < n; layer++){
+   globalToShared(sm, b, layer, n, ix, iy, gx, gy);
+   __syncthreads();
+   up = sm[ix + iy*(blockDim.x+2)];
+   a[gx + gy*n + (layer-1)*n*n] = 0.8*(down+up+l1);
+   down = self;
+   self = up;
+   l1 = sm[ix-1 + iy*(blockDim.x+2)] + sm[ix+1 + iy*(blockDim.x+2)] + sm[ix + (iy-1)*(blockDim.x+2)] + sm[ix + (iy+1)*(blockDim.x+2)];
+   __syncthreads();
+  }
  }
 }
 int main( int argc, char *argv[] ) {
@@ -206,8 +157,6 @@ int main( int argc, char *argv[] ) {
  // invoke Kernel
  dim3 block(32, 32);
  dim3 grid((n-2+block.x-1)/block.x,(n-2+block.y-1)/block.y);
- //int sm_size = (n*n>1024)?n*n:1024;
- //printf("gridx %d, gridy %d, sm_size %d\n",grid.x,grid.y,sm_size);
  kernal<<<grid,block,(1024+33*4)*sizeof(float)>>>(d_A,d_B,n);
  cudaDeviceSynchronize() ;
  //cudaDeviceProp GPUprop;
@@ -232,7 +181,7 @@ int main( int argc, char *argv[] ) {
   fptr = fopen("time.log","a");
   fprintf(fptr,"%d: %lf, %.6f %.6f %.6f %.6f\n", n, h_dResult, timeStampD-timeStampA, timeStampB-timeStampA, timeStampC-timeStampB, timeStampD-timeStampC);
   fclose(fptr);
-  printf("%lf %d\n", h_dResult, (int)timeStampD-timeStampA);
+  printf("%lf %d\n", h_dResult, (int)round(timeStampD-timeStampA));
  }else{
   //debugPrint(h_A, n);
   //debugPrint(h_dA, n);
