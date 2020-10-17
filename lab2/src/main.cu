@@ -102,9 +102,10 @@ __global__ void kernal( float *a, float *b, int n){
  float down,up,self;
  float l1;
  if(gx<n-1&&gy<n-1){
-  globalToShared(sm, b, 0, n, ix, iy, gx, gy);
-  __syncthreads();
-  down = sm[ix + iy*(blockDim.x+2)];
+  //globalToShared(sm, b, 0, n, ix, iy, gx, gy);
+  //__syncthreads();
+  //down = sm[ix + iy*(blockDim.x+2)];
+  down = b[gx+gy*n];
   globalToShared(sm, b, 1, n, ix, iy, gx, gy);
   __syncthreads();
   self = sm[ix + iy*(blockDim.x+2)];
