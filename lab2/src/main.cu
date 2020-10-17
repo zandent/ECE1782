@@ -14,19 +14,20 @@ double getTimeStamp() {
  gettimeofday( &tv, NULL ) ;
  return (double) tv.tv_usec/1000 + tv.tv_sec*1000 ;
 }
-void initData(float* data, int n){ 
+void initData(float* data, int n, int pad_n){
+ memset(data, 0, pad_n*pad_n*n*sizeof(float));
  int i,j,k;
  for(i = 0; i < n; i++){
   for(j = 0; j < n; j++){
    for(k = 0; k < n; k++){
-    data[i*n*n + j*n + k] = (float) (i+j+k)*1.1;
+    data[i*pad_n*pad_n + j*pad_n + k] = (float) (i+j+k)*1.1;
    }
   }
  }
 }
-void debugPrint(float* data, int n){
+void debugPaddingPrint(float* data, int n, int height){
  int i,j,k;
- for(i = 0; i < 3; i++){
+ for(i = 0; i < height; i++){
   printf("--------layer %d--------\n",i);
   for(j = 0; j < n; j++){
    for(k = 0; k < n; k++){
@@ -38,25 +39,39 @@ void debugPrint(float* data, int n){
  }
  printf("\n");
 }
+void debugPrint(float* data, int n, int pad_n){
+ int i,j,k;
+ for(i = 0; i < n; i++){
+  printf("--------layer %d--------\n",i);
+  for(j = 0; j < n; j++){
+   for(k = 0; k < n; k++){
+    printf("%lf ",data[i*pad_n*pad_n + j*pad_n + k]);
+   }
+   printf("\n");
+  }
+  printf("\n");
+ }
+ printf("\n");
+}
 // host side matrix addition
-void h_stencil(float *a, float *b, int n){
+void h_stencil(float *a, float *b, int n, int pad_n){
  int i,j,k;
  for(i = 1; i < n-1; i++){
   for(j = 1; j < n-1; j++){
    for(k = 1; k < n-1; k++){
-    a[i*n*n + j*n + k] = 0.8*(b[(i-1)*n*n+j*n+k]+b[(i+1)*n*n+j*n+k]+b[i*n*n+(j-1)*n+k]+b[i*n*n+(j+1)*n+k]+b[i*n*n+j*n+(k-1)]+b[i*n*n+j*n+(k+1)]);
+    a[i*pad_n*pad_n + j*pad_n + k] = 0.8*(b[(i-1)*pad_n*pad_n+j*pad_n+k]+b[(i+1)*pad_n*pad_n+j*pad_n+k]+b[i*pad_n*pad_n+(j-1)*pad_n+k]+b[i*pad_n*pad_n+(j+1)*pad_n+k]+b[i*pad_n*pad_n+j*pad_n+(k-1)]+b[i*pad_n*pad_n+j*pad_n+(k+1)]);
    }
   }
  }
 }
 // host side validation 
-bool val(float *a, float *b, int n){
+bool val(float *a, float *b, int n, int pad_n){
  int i,j,k;
  bool match = true;
- for(i = 0; i < n; i++){
-  for(j = 0; j < n; j++){
-   for(k = 0; k < n; k++){
-    if(match && (round(a[i*n*n + j*n + k]*100)/100 != round(b[i*n*n+j*n+k]*100)/100)){
+ for(i = 1; i < n-1; i++){
+  for(j = 1; j < n-1; j++){
+   for(k = 1; k < n-1; k++){
+    if(match && (round(a[i*pad_n*pad_n + j*pad_n + k]*100)/100 != round(b[i*pad_n*pad_n+j*pad_n+k]*100)/100)){
      //printf("%d,%d,%d expect %lf, actual %lf\n",i,j,k,h_A[i*n*n + j*n + k],h_dA[i*n*n+j*n+k]);
      match = false;
      //break;
@@ -66,34 +81,112 @@ bool val(float *a, float *b, int n){
  }
  return match;
 }
-float h_sum(float *data, int n){
+float h_sum(float *data, int n, int pad_n){
  int i,j,k;
  float ret=0;
- for(i = 0; i < n; i++){
-  for(j = 0; j < n; j++){
-   for(k = 0; k < n; k++){
-    ret += data[i*n*n + j*n + k]*(((i+j+k)%2)?1:-1);
+ for(i = 1; i < n-1; i++){
+  for(j = 1; j < n-1; j++){
+   for(k = 1; k < n-1; k++){
+    ret += data[i*pad_n*pad_n + j*pad_n + k]*(((i+j+k)%2)?1:-1);
    }
   }
  }
  return ret;
 }
+__const__ __device__ int indexX[32][32] = //indexX[threadY][threadX]
+{
+ { 0, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
+ {-1,-2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,1},
+ 
+ {-1, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+ {-1, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+ {-1, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+ {-1, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+ {-1, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+ {-1, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+ {-1, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+ {-1, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+ {-1, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+ {-1, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+ {-1, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+ {-1, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+ {-1, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+ {-1, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+ {-1, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+ {-1, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+ {-1, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+ {-1, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+ {-1, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+ {-1, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+ {-1, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+ {-1, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+ {-1, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+ {-1, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+ {-1, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+ {-1, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+ {-1, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+ {-1, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+ 
+ {-1,-2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,1},
+ { 0, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
+};
+__const__ __device__ int indexY[32][32] = //indexY[threadY][threadX]
+{
+ {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1},
+ { 0,-1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,-1, 0},
+ 
+ { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+ { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+ { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+ { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+ { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+ { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+ { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+ { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+ { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+ { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+ { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+ { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+ { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+ { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+ { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+ { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+ { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+ { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+ { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+ { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+ { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+ { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+ { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+ { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+ { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+ { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+ { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+ { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+ 
+ { 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0},
+ { 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1},
+};
+
 __device__ void globalToShared(float *sm, float *b, int l, int n, int smx, int smy, int ix, int iy){
   sm[smx+smy*(blockDim.x+2)] = b[ix + iy*n + l*n*n];
-  if(smx==1){
-   sm[0+smy*(blockDim.x+2)] = b[ix-1 + iy*n + l*n*n];
-  }
-  if(smx==blockDim.x || ix==n-2){
-   sm[smx+1+smy*(blockDim.x+2)] = b[ix+1 + iy*n + l*n*n];
-  }
-  if(smy==1){
-   sm[smx] = b[ix + (iy-1)*n + l*n*n];
-  }
-  if(smy==blockDim.y || iy==n-2){
-   sm[smx+(smy+1)*(blockDim.x+2)] = b[ix + (iy+1)*n + l*n*n];
-  }
+  int marginOffsetX = indexX[smy-1][smx-1];
+  int marginOffsetY = indexY[smy-1][smx-1];
+  sm[smx+marginOffsetX+(smy+marginOffsetY)*(blockDim.x+2)] = b[ix+marginOffsetX + (iy+marginOffsetY)*n + l*n*n];
+  //if(smx==1){
+  // sm[0+smy*(blockDim.x+2)] = b[ix-1 + iy*n + l*n*n];
+  //}
+  //if(smx==blockDim.x){
+  // sm[smx+1+smy*(blockDim.x+2)] = b[ix+1 + iy*n + l*n*n];
+  //}
+  //if(smy==1){
+  // sm[smx] = b[ix + (iy-1)*n + l*n*n];
+  //}
+  //if(smy==blockDim.y){
+  // sm[smx+(smy+1)*(blockDim.x+2)] = b[ix + (iy+1)*n + l*n*n];
+  //}
 }
-__global__ void kernal( float *a, float *b, int n){
+__global__ void kernal( float *a, float *b, int n, int height){
  extern __shared__ float sm[];
  int ix = threadIdx.x + 1;
  int iy = threadIdx.y + 1;
@@ -101,7 +194,7 @@ __global__ void kernal( float *a, float *b, int n){
  int gy = threadIdx.y + 1 + blockIdx.y*blockDim.y;
  float down,up,self;
  float l1;
- if(gx<n-1&&gy<n-1){
+ //if(gx<n-1&&gy<n-1){
   //globalToShared(sm, b, 0, n, ix, iy, gx, gy);
   //__syncthreads();
   //down = sm[ix + iy*(blockDim.x+2)];
@@ -113,7 +206,7 @@ __global__ void kernal( float *a, float *b, int n){
   __syncthreads();
   int layer;
   #pragma unroll
-  for(layer = 2; layer < n; layer++){
+  for(layer = 2; layer < height; layer++){
    globalToShared(sm, b, layer, n, ix, iy, gx, gy);
    __syncthreads();
    up = sm[ix + iy*(blockDim.x+2)];
@@ -123,7 +216,7 @@ __global__ void kernal( float *a, float *b, int n){
    l1 = sm[ix-1 + iy*(blockDim.x+2)] + sm[ix+1 + iy*(blockDim.x+2)] + sm[ix + (iy-1)*(blockDim.x+2)] + sm[ix + (iy+1)*(blockDim.x+2)];
    __syncthreads();
   }
- }
+ //}
 }
 int main( int argc, char *argv[] ) {
  // get program arguments
@@ -132,7 +225,10 @@ int main( int argc, char *argv[] ) {
  exit(1) ;
  }
  int n = atoi( argv[1] );
- int noElems = n*n*n ;
+ int pad_n = n + 32 - (n-2)%32;
+ //int pad_offset = pad_n-n;
+ printf("padding is %d\n",pad_n);
+ int noElems = pad_n*pad_n*n ;
  int bytes = noElems * sizeof(float) ;
 
  // alloc memory host-side
@@ -141,9 +237,10 @@ int main( int argc, char *argv[] ) {
  float *h_dA = (float *) malloc( bytes ) ;
 
  // init matrices with random data
- initData(h_B, n);
+ initData(h_B, n, pad_n);
  memset(h_A, 0, bytes);
  
+ //debugPaddingPrint(h_B,pad_n,n);
  // alloc memory dev-side
  float *d_A, *d_B ;
  cudaMalloc( (void **) &d_A, bytes ) ;
@@ -157,8 +254,9 @@ int main( int argc, char *argv[] ) {
  //debugPrint(h_B, n);
  // invoke Kernel
  dim3 block(32, 32);
- dim3 grid((n-2+block.x-1)/block.x,(n-2+block.y-1)/block.y);
- kernal<<<grid,block,(1024+33*4)*sizeof(float)>>>(d_A,d_B,n);
+ dim3 grid((pad_n-2+block.x-1)/block.x,(pad_n-2+block.y-1)/block.y);
+ printf("grid x %d, grid y %d\n",grid.x,grid.y);
+ kernal<<<grid,block,(1024+33*4)*sizeof(float)>>>(d_A,d_B,pad_n,n);
  cudaDeviceSynchronize() ;
  //cudaDeviceProp GPUprop;
  //cudaGetDeviceProperties(&GPUprop,0);
@@ -169,13 +267,12 @@ int main( int argc, char *argv[] ) {
  cudaMemcpy( h_dA, d_A, bytes, cudaMemcpyDeviceToHost ) ;
  double timeStampD = getTimeStamp() ;
 
- h_stencil(h_A,h_B,n);
- //float h_Result = h_sum(h_A,n);
- float h_dResult = h_sum(h_dA,n);
+ h_stencil(h_A,h_B,n,pad_n);
+ float h_dResult = h_sum(h_dA,n,pad_n);
  
  // print out results
  //if(!memcmp(h_A,h_dA,n*n*n*sizeof(float))){
- if(val(h_A,h_dA,n)){
+ if(val(h_A,h_dA,n,pad_n)){
   //debugPrint(h_hC, nx, ny);
   //debugPrint(h_dC, nx, ny);
   FILE* fptr;
@@ -184,8 +281,8 @@ int main( int argc, char *argv[] ) {
   fclose(fptr);
   printf("%lf %d\n", h_dResult, (int)round(timeStampD-timeStampA));
  }else{
-  //debugPrint(h_A, n);
-  //debugPrint(h_dA, n);
+  debugPrint(h_A, n, pad_n);
+  debugPrint(h_dA, n, pad_n);
   printf("Error: function failed.\n");
  }
  
