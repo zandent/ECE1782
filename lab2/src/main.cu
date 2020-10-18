@@ -7,7 +7,7 @@
 //#include <device_launch_parameters.h>
 #include <cuda_runtime.h>
 //#include "../inc/helper_cuda.h"
-#define NUM_STREAMS 8 
+#define NUM_STREAMS 16 
 //texture<float, 1, cudaReadModeElementType> texRef;
 // time stamp function in ms
 double getTimeStamp() {
@@ -58,7 +58,7 @@ bool val(float *a, float *b, int n){
   for(j = 0; j < n; j++){
    for(k = 0; k < n; k++){
     if(match && (round(a[i*n*n + j*n + k]*100)/100 != round(b[i*n*n+j*n+k]*100)/100)){
-     printf("%d,%d,%d expect %lf, actual %lf\n",i,j,k,a[i*n*n + j*n + k],b[i*n*n+j*n+k]);
+     //printf("%d,%d,%d expect %lf, actual %lf\n",i,j,k,a[i*n*n + j*n + k],b[i*n*n+j*n+k]);
      match = false;
      //break;
     }
@@ -159,7 +159,9 @@ int main( int argc, char *argv[] ) {
  // invoke Kernel
  dim3 block(32, 32);
  dim3 grid((n-2+block.x-1)/block.x,(n-2+block.y-1)/block.y);
-
+ double timeStampA = getTimeStamp() ;
+ double timeStampD = getTimeStamp() ;
+ if(n>=250){
  //transfer data to dev
  //stream creation
  int batch_h = (n+NUM_STREAMS-1)/NUM_STREAMS;
@@ -181,7 +183,7 @@ int main( int argc, char *argv[] ) {
  // printf("off %d is %d\n",k,offset[k]);
  //}
 
- double timeStampA = getTimeStamp() ;
+ timeStampA = getTimeStamp() ;
  cudaStream_t stream[NUM_STREAMS+1];
  for (int i = 1; i < NUM_STREAMS; i++){
   cudaStreamCreate(&(stream[i]));
@@ -198,20 +200,26 @@ int main( int argc, char *argv[] ) {
  for(int i = 1; i < NUM_STREAMS+1; i++){
   cudaStreamSynchronize(stream[i]);
  }
- //cudaMemcpy( d_B, h_B, bytes, cudaMemcpyHostToDevice ) ;
- //cudaBindTexture(NULL,texRef,d_B,bytes);
- //double timeStampB = getTimeStamp() ;
+ timeStampD = getTimeStamp() ;
+ }else{
+ timeStampA = getTimeStamp() ;
+ //transfer data to dev
+ cudaMemcpy( d_B, h_B, bytes, cudaMemcpyHostToDevice ) ;
 
- //cudaDeviceSynchronize() ;
+ //debugPrint(h_B, n);
+ // invoke Kernel
+ dim3 block(32, 32);
+ dim3 grid((n-2+block.x-1)/block.x,(n-2+block.y-1)/block.y);
+ kernal<<<grid,block,(1024+33*4)*sizeof(float)>>>(d_A,d_B,n,n);
+ cudaDeviceSynchronize() ;
  //cudaDeviceProp GPUprop;
  //cudaGetDeviceProperties(&GPUprop,0);
  //printf("maxgridsize x is %d\n",GPUprop.maxGridSize[0]);
 
- //double timeStampC = getTimeStamp() ;
  //copy data back
- //cudaMemcpy( h_dA, d_A, bytes, cudaMemcpyDeviceToHost ) ;
- double timeStampD = getTimeStamp() ;
-
+ cudaMemcpy( h_dA, d_A, bytes, cudaMemcpyDeviceToHost ) ;
+ timeStampD = getTimeStamp() ;
+ }
  h_stencil(h_A,h_B,n);
  //float h_Result = h_sum(h_A,n);
  float h_dResult = h_sum(h_dA,n);

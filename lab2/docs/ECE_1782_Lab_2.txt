@@ -13,14 +13,16 @@ Your program should have one argument which specifies the size n.
 Then,  each element of the input cube, b, should be initialized, CPU-side, as follows: b[i][j][k] =  (i+j+k)*1.1. (Of course, in real life, you would input the cube b.)
 The code above should run as a kernel GPU-side.
 Cube a should then be transferred to CPU memory, and checked for correctness.
+The elements of a not set by the above algorithm should be set to 0.0.
 
 Your program should output one line with two numbers on it separated by a blank:
 
-1.The sum over all elements of the cube of  a[i][j][k] * ((i+j+k)?1:-1) using printf format "%lf".
-2.The aggregate time it took for your kernel to (i) transfer b to the GPU, (ii) execute your kernel, and (iii) transfer a back to the CPU, in milliseconds, properly rounded to an integer. The time taken for the following should not be included:
-	1).initialization of b
-	2).computation of the sum in (i) above 
-	3).checking correctness of a
+        The sum over all elements of the cube of  a[i][j][k] * (((i+j+k)%2)?1:-1) using printf format "%lf".
+        The aggregate time it took for your kernel to (i) transfer b to the GPU, (ii) execute your kernel, and (iii) transfer a back to the CPU, in milliseconds, properly rounded to an integer. The time taken for the following should not be included:
+            initialization of b
+            computation of the sum in (i) above 
+            checking correctness of a
+
 Your goal should make GPU implementation of this algorithm as fast as possible.
 
 The code you submit should fit in 1 file that is to be uploaded here. The name of the file should be <student_number>.cu.
