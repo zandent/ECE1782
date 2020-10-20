@@ -57,7 +57,8 @@ bool val(float *a, float *b, int n){
  for(i = 0; i < n; i++){
   for(j = 0; j < n; j++){
    for(k = 0; k < n; k++){
-    if(match && (round(a[i*n*n + j*n + k]*100)/100 != round(b[i*n*n+j*n+k]*100)/100)){
+    if(match && (roundf(a[i*n*n + j*n + k]*100)/100 != roundf(b[i*n*n+j*n+k]*100)/100)){
+    //if(a[i*n*n + j*n + k] != b[i*n*n+j*n+k]){
      //printf("%d,%d,%d expect %lf, actual %lf\n",i,j,k,a[i*n*n + j*n + k],b[i*n*n+j*n+k]);
      match = false;
      //break;
@@ -67,13 +68,27 @@ bool val(float *a, float *b, int n){
  }
  return match;
 }
-float h_sum(float *data, int n){
+double h_rsum(float *data, int n){
  int i,j,k;
- float ret=0;
- for(i = 0; i < n; i++){
-  for(j = 0; j < n; j++){
-   for(k = 0; k < n; k++){
+ double ret=0;
+ for(i = 1; i < n-1; i++){
+  for(j = 1; j < n-1; j++){
+   for(k = 1; k < n-1; k++){
+    //ret += roundf(data[i*n*n + j*n + k]*100)/100*(((i+j+k)%2)?1:-1);
     ret += data[i*n*n + j*n + k]*(((i+j+k)%2)?1:-1);
+   }
+  }
+ }
+ return ret;
+}
+double h_sum(float *data, int n){
+ int i,j,k;
+ double ret=0;
+ for(i = 1; i < n-1; i++){
+  for(j = 1; j < n-1; j++){
+   for(k = 1; k < n-1; k++){
+    ret += roundf(data[i*n*n + j*n + k]*100)/100*(((i+j+k)%2)?1:-1);
+    //ret += data[i*n*n + j*n + k]*(((i+j+k)%2)?1:-1);
    }
   }
  }
@@ -221,22 +236,27 @@ int main( int argc, char *argv[] ) {
  timeStampD = getTimeStamp() ;
  }
  h_stencil(h_A,h_B,n);
- //float h_Result = h_sum(h_A,n);
+ //float h_Result = h_rsum(h_dA,n);
  float h_dResult = h_sum(h_dA,n);
  
  // print out results
  //if(!memcmp(h_A,h_dA,n*n*n*sizeof(float))){
  if(val(h_A,h_dA,n)){
-  //debugPrint(h_hC, nx, ny);
+  //debugPrint(h_A, n);
   //debugPrint(h_dC, nx, ny);
   FILE* fptr;
   fptr = fopen("time.log","a");
-  fprintf(fptr,"%d: %lf, %.6f\n", n, h_dResult, timeStampD-timeStampA);
+  fprintf(fptr,"%d: %lf %.6f\n", n, h_dResult, timeStampD-timeStampA); 
   fclose(fptr);
+  //printf("%lf %lf %d\n", h_dResult, h_Result, (int)round(timeStampD-timeStampA));
   printf("%lf %d\n", h_dResult, (int)round(timeStampD-timeStampA));
  }else{
   //debugPrint(h_A, n);
   //debugPrint(h_dA, n);
+  FILE* fptr;
+  fptr = fopen("time.log","a");
+  fprintf(fptr,"%d Error: function failed.\n", n);
+  fclose(fptr);
   printf("Error: function failed.\n");
  }
  

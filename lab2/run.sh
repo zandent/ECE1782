@@ -1,6 +1,6 @@
 #!/bin/bash
 echo "-----lab2 tester----"
-for i in {1..300..1}
+for i in {1..1000..1}
   do
      echo "run size $i"
      out/main $i
