@@ -53,20 +53,21 @@ void h_stencil(float *a, float *b, int n){
 // host side validation 
 bool val(float *a, float *b, int n){
  int i,j,k;
- bool match = true;
  for(i = 0; i < n; i++){
   for(j = 0; j < n; j++){
    for(k = 0; k < n; k++){
-    if(match && (roundf(a[i*n*n + j*n + k]*100)/100 != roundf(b[i*n*n+j*n+k]*100)/100)){
+    if((roundf(a[i*n*n + j*n + k]*100)/100 != roundf(b[i*n*n+j*n+k]*100)/100)){
     //if(a[i*n*n + j*n + k] != b[i*n*n+j*n+k]){
      //printf("%d,%d,%d expect %lf, actual %lf\n",i,j,k,a[i*n*n + j*n + k],b[i*n*n+j*n+k]);
-     match = false;
      //break;
+     return false;
+    }else{
+     b[i*n*n+j*n+k] = a[i*n*n+j*n+k];
     }
    }
   }
  }
- return match;
+ return true;
 }
 double h_rsum(float *data, int n){
  int i,j,k;
@@ -236,12 +237,14 @@ int main( int argc, char *argv[] ) {
  timeStampD = getTimeStamp() ;
  }
  h_stencil(h_A,h_B,n);
- //float h_Result = h_rsum(h_dA,n);
- float h_dResult = h_sum(h_dA,n);
+ //h_dA = h_A;
+ bool match = val(h_A,h_dA,n);
+ //float h_Result = h_rsum(h_A,n);
+ float h_dResult = h_rsum(h_dA,n);
  
  // print out results
  //if(!memcmp(h_A,h_dA,n*n*n*sizeof(float))){
- if(val(h_A,h_dA,n)){
+ if(match){
   //debugPrint(h_A, n);
   //debugPrint(h_dC, nx, ny);
   FILE* fptr;
