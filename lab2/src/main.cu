@@ -2,13 +2,9 @@
 #include <stdio.h>
 #include<math.h>
 //TODO for writing to file, will be deleted
-#include <stdlib.h>
-//TODO: could include later
-//#include <device_launch_parameters.h>
+//#include <stdlib.h>
 #include <cuda_runtime.h>
-//#include "../inc/helper_cuda.h"
 #define NUM_STREAMS 16 
-//texture<float, 1, cudaReadModeElementType> texRef;
 // time stamp function in ms
 double getTimeStamp() {
  struct timeval tv ;
@@ -105,7 +101,7 @@ __device__ void globalToShared(float *sm, float *b, int l, int n, int smx, int s
   }
 }
 __global__ void kernal( float *a, float *b, int n, int height){
- extern __shared__ float sm[];
+ __shared__ float sm[1024];
  int ix = threadIdx.x + 1;
  int iy = threadIdx.y + 1;
  int gx = threadIdx.x + 1 + blockIdx.x*blockDim.x;
@@ -113,9 +109,6 @@ __global__ void kernal( float *a, float *b, int n, int height){
  float down,up,self;
  float l1,l2,l3,l4;
  if(gx<n-1&&gy<n-1){
-  //globalToShared(sm, b, 0, n, ix, iy, gx, gy);
-  //__syncthreads();
-  //down = sm[ix + iy*(blockDim.x+2)];
   down = b[gx+gy*n];
   globalToShared(sm, b, 1, n, ix, iy, gx, gy);
   __syncthreads();
@@ -134,11 +127,10 @@ __global__ void kernal( float *a, float *b, int n, int height){
    a[gx + gy*n + (layer-1)*n*n] = 0.8*(down+up+l1+l2+l3+l4);
    down = self;
    self = up;
-  l1 = sm[ix-1 + iy*(blockDim.x+2)];
-  l2 = sm[ix+1 + iy*(blockDim.x+2)];
-  l3 = sm[ix + (iy-1)*(blockDim.x+2)];
-  l4 = sm[ix + (iy+1)*(blockDim.x+2)];
-  // l1 = sm[ix-1 + iy*(blockDim.x+2)] + sm[ix+1 + iy*(blockDim.x+2)] + sm[ix + (iy-1)*(blockDim.x+2)] + sm[ix + (iy+1)*(blockDim.x+2)];
+   l1 = sm[ix-1 + iy*(blockDim.x+2)];
+   l2 = sm[ix+1 + iy*(blockDim.x+2)];
+   l3 = sm[ix + (iy-1)*(blockDim.x+2)];
+   l4 = sm[ix + (iy+1)*(blockDim.x+2)];
    __syncthreads();
   }
  }
@@ -228,7 +220,7 @@ int main( int argc, char *argv[] ) {
  // invoke Kernel
  dim3 block(32, 32);
  dim3 grid((n-2+block.x-1)/block.x,(n-2+block.y-1)/block.y);
- kernal<<<grid,block,(1024+33*4)*sizeof(float)>>>(d_A,d_B,n,n);
+ kernal<<<grid,block/*,(1024+33*4)*sizeof(float)*/>>>(d_A,d_B,n,n);
  cudaDeviceSynchronize() ;
  //cudaDeviceProp GPUprop;
  //cudaGetDeviceProperties(&GPUprop,0);
@@ -249,19 +241,19 @@ int main( int argc, char *argv[] ) {
  if(match){
   //debugPrint(h_A, n);
   //debugPrint(h_dC, nx, ny);
-  FILE* fptr;
-  fptr = fopen("time.log","a");
-  fprintf(fptr,"%d: %lf %.6f\n", n, h_dResult, timeStampD-timeStampA); 
-  fclose(fptr);
+  //FILE* fptr;
+  //fptr = fopen("time.log","a");
+  //fprintf(fptr,"%d: %lf %.6f\n", n, h_dResult, timeStampD-timeStampA); 
+  //fclose(fptr);
   //printf("%lf %lf %d\n", h_dResult, h_Result, (int)round(timeStampD-timeStampA));
   printf("%lf %d\n", h_dResult, (int)round(timeStampD-timeStampA));
  }else{
   //debugPrint(h_A, n);
   //debugPrint(h_dA, n);
-  FILE* fptr;
-  fptr = fopen("time.log","a");
-  fprintf(fptr,"%d Error: function failed.\n", n);
-  fclose(fptr);
+  //FILE* fptr;
+  //fptr = fopen("time.log","a");
+  //fprintf(fptr,"%d Error: function failed.\n", n);
+  //fclose(fptr);
   printf("Error: function failed.\n");
  }
  
