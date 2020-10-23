@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 import sys
 n = int(sys.argv[1])
 b = [0.0]*n*n*n

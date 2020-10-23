@@ -56,31 +56,14 @@ bool val(float *a, float *b, int n){
  for(i = 0; i < n; i++){
   for(j = 0; j < n; j++){
    for(k = 0; k < n; k++){
-    if((roundf(a[i*n*n + j*n + k]*100)/100 != roundf(b[i*n*n+j*n+k]*100)/100)){
-    //if(a[i*n*n + j*n + k] != b[i*n*n+j*n+k]){
+    if(a[i*n*n + j*n + k] != b[i*n*n+j*n+k]){
      //printf("%d,%d,%d expect %lf, actual %lf\n",i,j,k,a[i*n*n + j*n + k],b[i*n*n+j*n+k]);
-     //break;
      return false;
-    }else{
-     b[i*n*n+j*n+k] = a[i*n*n+j*n+k];
     }
    }
   }
  }
  return true;
-}
-double h_rsum(float *data, int n){
- int i,j,k;
- double ret=0;
- for(i = 1; i < n-1; i++){
-  for(j = 1; j < n-1; j++){
-   for(k = 1; k < n-1; k++){
-    //ret += roundf(data[i*n*n + j*n + k]*100)/100*(((i+j+k)%2)?1:-1);
-    ret += data[i*n*n + j*n + k]*(((i+j+k)%2)?1:-1);
-   }
-  }
- }
- return ret;
 }
 double h_sum(float *data, int n){
  int i,j,k;
@@ -88,8 +71,19 @@ double h_sum(float *data, int n){
  for(i = 1; i < n-1; i++){
   for(j = 1; j < n-1; j++){
    for(k = 1; k < n-1; k++){
+    ret += data[i*n*n + j*n + k]*(((i+j+k)%2)?1:-1);
+   }
+  }
+ }
+ return ret;
+}
+double h_rsum(float *data, int n){
+ int i,j,k;
+ double ret=0;
+ for(i = 1; i < n-1; i++){
+  for(j = 1; j < n-1; j++){
+   for(k = 1; k < n-1; k++){
     ret += roundf(data[i*n*n + j*n + k]*100)/100*(((i+j+k)%2)?1:-1);
-    //ret += data[i*n*n + j*n + k]*(((i+j+k)%2)?1:-1);
    }
   }
  }
@@ -117,7 +111,7 @@ __global__ void kernal( float *a, float *b, int n, int height){
  int gx = threadIdx.x + 1 + blockIdx.x*blockDim.x;
  int gy = threadIdx.y + 1 + blockIdx.y*blockDim.y;
  float down,up,self;
- float l1;
+ float l1,l2,l3,l4;
  if(gx<n-1&&gy<n-1){
   //globalToShared(sm, b, 0, n, ix, iy, gx, gy);
   //__syncthreads();
@@ -126,7 +120,10 @@ __global__ void kernal( float *a, float *b, int n, int height){
   globalToShared(sm, b, 1, n, ix, iy, gx, gy);
   __syncthreads();
   self = sm[ix + iy*(blockDim.x+2)];
-  l1 = sm[ix-1 + iy*(blockDim.x+2)] + sm[ix+1 + iy*(blockDim.x+2)] + sm[ix + (iy-1)*(blockDim.x+2)] + sm[ix + (iy+1)*(blockDim.x+2)];
+  l1 = sm[ix-1 + iy*(blockDim.x+2)];
+  l2 = sm[ix+1 + iy*(blockDim.x+2)];
+  l3 = sm[ix + (iy-1)*(blockDim.x+2)];
+  l4 = sm[ix + (iy+1)*(blockDim.x+2)];
   __syncthreads();
   int layer;
   #pragma unroll
@@ -134,10 +131,14 @@ __global__ void kernal( float *a, float *b, int n, int height){
    globalToShared(sm, b, layer, n, ix, iy, gx, gy);
    __syncthreads();
    up = sm[ix + iy*(blockDim.x+2)];
-   a[gx + gy*n + (layer-1)*n*n] = 0.8*(down+up+l1);
+   a[gx + gy*n + (layer-1)*n*n] = 0.8*(down+up+l1+l2+l3+l4);
    down = self;
    self = up;
-   l1 = sm[ix-1 + iy*(blockDim.x+2)] + sm[ix+1 + iy*(blockDim.x+2)] + sm[ix + (iy-1)*(blockDim.x+2)] + sm[ix + (iy+1)*(blockDim.x+2)];
+  l1 = sm[ix-1 + iy*(blockDim.x+2)];
+  l2 = sm[ix+1 + iy*(blockDim.x+2)];
+  l3 = sm[ix + (iy-1)*(blockDim.x+2)];
+  l4 = sm[ix + (iy+1)*(blockDim.x+2)];
+  // l1 = sm[ix-1 + iy*(blockDim.x+2)] + sm[ix+1 + iy*(blockDim.x+2)] + sm[ix + (iy-1)*(blockDim.x+2)] + sm[ix + (iy+1)*(blockDim.x+2)];
    __syncthreads();
   }
  }
@@ -164,7 +165,8 @@ int main( int argc, char *argv[] ) {
 
  // init matrices with random data
  initData(h_B, n);
- memset(h_A, 0, bytes);
+ memset(h_A, 0.0, bytes);
+ memset(h_dA, 0.0, bytes);
  
  // alloc memory dev-side
  float *d_A, *d_B ;
@@ -240,7 +242,7 @@ int main( int argc, char *argv[] ) {
  //h_dA = h_A;
  bool match = val(h_A,h_dA,n);
  //float h_Result = h_rsum(h_A,n);
- float h_dResult = h_rsum(h_dA,n);
+ float h_dResult = h_sum(h_dA,n);
  
  // print out results
  //if(!memcmp(h_A,h_dA,n*n*n*sizeof(float))){
