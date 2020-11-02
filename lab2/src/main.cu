@@ -101,7 +101,7 @@ __device__ void globalToShared(float *sm, float *b, int l, int n, int smx, int s
   }
 }
 __global__ void kernal( float *a, float *b, int n, int height){
- __shared__ float sm[1024];
+ extern __shared__ float sm[];
  int ix = threadIdx.x + 1;
  int iy = threadIdx.y + 1;
  int gx = threadIdx.x + 1 + blockIdx.x*blockDim.x;
@@ -220,7 +220,7 @@ int main( int argc, char *argv[] ) {
  // invoke Kernel
  dim3 block(32, 32);
  dim3 grid((n-2+block.x-1)/block.x,(n-2+block.y-1)/block.y);
- kernal<<<grid,block/*,(1024+33*4)*sizeof(float)*/>>>(d_A,d_B,n,n);
+ kernal<<<grid,block,(1024+33*4)*sizeof(float)>>>(d_A,d_B,n,n);
  cudaDeviceSynchronize() ;
  //cudaDeviceProp GPUprop;
  //cudaGetDeviceProperties(&GPUprop,0);
