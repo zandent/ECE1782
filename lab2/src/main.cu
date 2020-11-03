@@ -16,7 +16,7 @@ void initData(float* data, int n){
  for(i = 0; i < n; i++){
   for(j = 0; j < n; j++){
    for(k = 0; k < n; k++){
-    data[i*n*n + j*n + k] = (float) (i+j+k)*1.1;
+    data[i*n*n + j*n + k] = (float) (i+j+k)*(float)1.1;
    }
   }
  }
@@ -41,7 +41,7 @@ void h_stencil(float *a, float *b, int n){
  for(i = 1; i < n-1; i++){
   for(j = 1; j < n-1; j++){
    for(k = 1; k < n-1; k++){
-    a[i*n*n + j*n + k] = 0.8*(b[(i-1)*n*n+j*n+k]+b[(i+1)*n*n+j*n+k]+b[i*n*n+(j-1)*n+k]+b[i*n*n+(j+1)*n+k]+b[i*n*n+j*n+(k-1)]+b[i*n*n+j*n+(k+1)]);
+    a[i*n*n + j*n + k] = ((float)0.8)*(b[(i-1)*n*n+j*n+k]+b[(i+1)*n*n+j*n+k]+b[i*n*n+(j-1)*n+k]+b[i*n*n+(j+1)*n+k]+b[i*n*n+j*n+(k-1)]+b[i*n*n+j*n+(k+1)]);
    }
   }
  }
@@ -124,7 +124,7 @@ __global__ void kernal( float *a, float *b, int n, int height){
    globalToShared(sm, b, layer, n, ix, iy, gx, gy);
    __syncthreads();
    up = sm[ix + iy*(blockDim.x+2)];
-   a[gx + gy*n + (layer-1)*n*n] = 0.8*(down+up+l1+l2+l3+l4);
+   a[gx + gy*n + (layer-1)*n*n] = ((float)0.8)*(down+up+l1+l2+l3+l4);
    down = self;
    self = up;
    l1 = sm[ix-1 + iy*(blockDim.x+2)];
