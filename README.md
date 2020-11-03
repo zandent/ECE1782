@@ -1,5 +1,5 @@
 # ECE1782
-## Titile
+## Title
 ECE1782H F LEC0101 20209:Programming Massively Parallel Multiprocessors and Heterogeneous Systems
 ## Labs
 Lab1: matrix addition on GPU
